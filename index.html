@@ -16,8 +16,39 @@
    var routeConfig = bus_feed + "routeConfig";
    var vehicleLocations = bus_feed + "vehicleLocations";
 
-   function draw_buses(map, busarr, route) {
+   var max_lat = null;
+   var min_lat = null;
+   var max_lng = null;
+   var min_lng = null;
 
+   function update_bounds(lat, lng) {
+     if (max_lat == null || lat > max_lat ) { max_lat = lat; }
+     if (min_lat == null || lat < min_lat ) { min_lat = lat; }
+
+     if (max_lng == null || lng < max_lng ) { max_lng = lng; }
+     if (min_lng == null || lng > min_lng ) { min_lng = lng; }
+   }
+
+   function initialize() {
+    var latlng = new google.maps.LatLng(42.3, -71.1);
+    var myOptions = {
+      zoom: 11,
+      center: latlng,
+      mapTypeId: google.maps.MapTypeId.ROADMAP
+    };
+    var map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);
+
+    function recenter () {
+       if (max_lat != null && min_lat != null && max_lng != null && min_lng != null) {
+          var sw = new google.maps.LatLng(min_lat, min_lng);
+          var ne = new google.maps.LatLng(max_lat, max_lng);
+          map.fitBounds(new google.maps.LatLngBounds(sw, ne));
+       }
+    }
+
+
+    function draw_buses(map, busarr, route) {
+ 
      $.getJSON('/Buses?route=' + route, function(buses) {
 
         while (busarr.length > 0) {
@@ -36,6 +67,7 @@
           );
 
           var blatlng = new google.maps.LatLng(bus.lat, bus.lon);
+          update_bounds(bus.lat, bus.lng)
           var bmarker = new google.maps.Marker({
             icon: bimage,
             position: blatlng,
@@ -44,17 +76,23 @@
 
           bmarker.setMap(map);
           busarr.push(bmarker);
-
-          //alert("marking " + bus.lat + ", " + bus.lon);
         }
       });
-   }
+    }
 
-   function draw_routes(map, route, n_buses, busarr) {
+    function draw_routes(map, route, busarr) {
+
+      {% if shading %}
       $.getJSON('/Buses?route=' + route, function(buses) {
          var n_buses = buses.length;
-         var opacity = n_buses/15;
+         var opacity = n_buses/10;
+         //var opacity = 1.0;
          var weight = n_buses/8+1;
+         //var weight = n_buses/4+1;
+      {% else %}
+         var opacity = 1.0;
+         var weight = 2.0;
+      {% endif %}
 
          $.getJSON('/Paths?route=' + route, function(paths) {
 
@@ -62,6 +100,7 @@
                var coords = new Array();
                for (point_no in paths[path_no]) {
                    var point = paths[path_no][point_no];
+                   update_bounds(point.lat, point.lng)
                    coords.push( new google.maps.LatLng(point.lat, point.lng) );
                }
 
@@ -76,31 +115,30 @@
                google.maps.event.addListener(buspath, "click", function() {
                  draw_buses(map, busarr, route);
                });
+
+               recenter();
            }
            //draw_buses(map, busarr, route);
          });
+
+      {% if shading %}
       });
-   }
+      {% endif %}
+    }
 
-   function initialize() {
-    var latlng = new google.maps.LatLng(42.4, -71.1);
-    var myOptions = {
-      zoom: 11,
-      center: latlng,
-      mapTypeId: google.maps.MapTypeId.ROADMAP
-    };
-    var map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);
+    {% if all_routes %}
+      $.getJSON('/Routes', function(routes) {
+         for (route_no in routes) {
+            draw_routes(map, routes[route_no], new Array());
+         }
+      });
+    {% else %}
+       {% for route in routes %}
+          draw_routes(map, {{route}}, new Array());
+       {% endfor %}
+    {% endif %}
 
-    $.getJSON('/Routes', function(routes) {
-       for (route_no in routes) {
-          draw_routes(map, routes[route_no], new Array());
-       }
-    });
-    //draw_routes(map, "77", new Array());
-    //draw_routes(map, "74", new Array());
-    //draw_routes(map, "72", new Array());
-    //draw_routes(map, "78", new Array());
-    //draw_routes(map, "75", new Array());
+    
   }
 
 </script>

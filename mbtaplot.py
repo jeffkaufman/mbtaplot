@@ -10,8 +10,6 @@ from google.appengine.ext.webapp.util import run_wsgi_app
 from xml.sax.saxutils import escape
 import simplejson as json
 
-maps_key='ABQIAAAA5EZP5qCoaub5KG1QSmw1KhQQgZrvOX3gye-SKpRLyNsCw8EkTRTsLF90-utHavKb_PVOhaSa31S44Q'
-
 BUS_FEED="http://webservices.nextbus.com/service/publicXMLFeed?"
 
 class Bus(object):
@@ -123,7 +121,23 @@ class Buses(webapp.RequestHandler):
 
 class MainPage(webapp.RequestHandler):
     def get(self):
-        template_values = {"route": "77"}
+        
+        shading = cgi.escape(self.request.get('shading')).lower() == "true"
+        all_routes = False
+
+        routes = []
+        routes_req = cgi.escape(self.request.get('routes'))
+        if routes_req == "all":
+            all_routes = True
+        elif routes_req:
+            routes = routes_req.split(",")
+
+        if not routes:
+            routes = ["77", "78", "74", "75", "72", "94", "96"]
+
+        template_values = {"shading": shading,
+                           "all_routes": all_routes,
+                           "routes": routes}
         
         path = os.path.join(os.path.dirname(__file__), 'index.html')
         self.response.out.write(template.render(path, template_values))

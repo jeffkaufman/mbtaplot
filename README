@@ -1,0 +1,28 @@
+MBTA Bus Plotter
+----------------
+
+Plots bus routes and locations, runs on google app engine
+
+Live at http://mbtaplot.appspot.com/
+
+uses:
+
+  http://mbtaplot.appspot.com/
+    - show a default set of routes
+
+  http://mbtaplot.appspot.com/?routes=77,78,72
+    - show specific routes
+
+  http://mbtaplot.appspot.com/?routes=all
+    - show all routes
+     - very slow, may crash your browser
+
+  http://mbtaplot.appspot.com/?routes=77,78,72?shading=true
+    - shade and size routes by the number of buses currently on them
+    - ideally we'd merge sections over the same area so we could size
+      them properly, but we don't
+      - the shared portions of routes will be underemphasized
+  
+  click on a route to show the buses on it
+
+  click on it again (at least 45sec later) to update bus locations
