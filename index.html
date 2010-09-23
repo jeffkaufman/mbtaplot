@@ -118,7 +118,9 @@
 
                recenter();
            }
-           //draw_buses(map, busarr, route);
+           {% if buses %}
+             draw_buses(map, busarr, route);
+           {% endif %}
          });
 
       {% if shading %}

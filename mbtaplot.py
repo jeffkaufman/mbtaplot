@@ -122,6 +122,7 @@ class Buses(webapp.RequestHandler):
 class MainPage(webapp.RequestHandler):
     def get(self):
         
+        buses = cgi.escape(self.request.get('buses')).lower() == "true"
         shading = cgi.escape(self.request.get('shading')).lower() == "true"
         all_routes = False
 
@@ -137,6 +138,7 @@ class MainPage(webapp.RequestHandler):
 
         template_values = {"shading": shading,
                            "all_routes": all_routes,
+                           "buses": buses,
                            "routes": routes}
         
         path = os.path.join(os.path.dirname(__file__), 'index.html')
