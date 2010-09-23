@@ -5,7 +5,7 @@ Plots bus routes and locations, runs on google app engine
 
 Live at http://mbtaplot.appspot.com/
 
-uses:
+Uses:
 
   http://mbtaplot.appspot.com/
     - show a default set of routes
@@ -22,7 +22,23 @@ uses:
     - ideally we'd merge sections over the same area so we could size
       them properly, but we don't
       - the shared portions of routes will be underemphasized
-  
+
+  http://mbtaplot.appspot.com/?routes=77,78,72&buses=true
+    - show buses   
+
   click on a route to show the buses on it
 
   click on it again (at least 45sec later) to update bus locations
+
+
+Design:
+  - mbtaplot.py makes xml requests to the nextbus web service and
+    caches the results.  It serves index.html in response to most
+    requests and json answers to requests for Paths or Buses.
+
+  - index.html runs javascript with jquery to load the map, add the
+    buses as markers, and add the paths as polylines.  It gets it's
+    data by requesting json from Paths or Buses like this:
+
+       http://mbtaplot.appspot.com/Paths?route=77
+       http://mbtaplot.appspot.com/Buses?route=77
