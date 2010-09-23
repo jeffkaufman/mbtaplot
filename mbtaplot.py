@@ -59,6 +59,16 @@ class BusRoute(object):
         for bus in buses:
             bus.attrs["secsSinceReport"] = int(bus.attrs["secsSinceReport"]) + time_diff
 
+    @staticmethod
+    def allRoutes():
+        use_url = BUS_FEED + "&".join(("command=routeList",
+                                       "a=mbta"))
+        usock = urllib2.urlopen(use_url)
+        xmldoc = minidom.parse(usock)
+        usock.close()
+
+        return [BusRoute(route.getAttribute("title")) for route in xmldoc.getElementsByTagName("route")]
+
 class Point(object):
     def __init__(self, xml_point):
         self.lat = xml_point.getAttribute("lat")
@@ -71,30 +81,45 @@ class Path(object):
         return self.points[x]
 
 class Paths(webapp.RequestHandler):
+    cache = {}
+
     def get(self):
-        paths = BusRoute(cgi.escape(self.request.get('route'))).paths()
-        self.response.out.write(json.dumps([[{"lat": point.lat,
+        route = cgi.escape(self.request.get('route'))
+        if route not in self.cache:
+            self.cache[route] = json.dumps([[{"lat": point.lat,
                                               "lng": point.lon}
                                              for point in path]
-                                            for path in paths]))
+                                            for path in BusRoute(route).paths()])
+        self.response.out.write(self.cache[route])
+
+
+class Routes(webapp.RequestHandler):
+    def get(self):
+        routes = BusRoute.allRoutes()
+        self.response.out.write(json.dumps([route.route_num for route in routes]))
+
         
 class Buses(webapp.RequestHandler):
     cache = {}
     def buses_for_route(self, route):
+        now = time.time()
         if route in self.cache:
             timestamp, buses = self.cache[route]
-            time_diff = int(time.time() - timestamp)
+            time_diff = int(now - timestamp)
             if time_diff < 45:
                 BusRoute.age_buses(buses, time_diff)
+                self.cache[route] = now, buses
                 return buses
+
         buses = BusRoute(route).buses()
-        self.cache[route] = (time.time(), buses)
+        self.cache[route] = (now, buses)
         return buses
 
     def get(self):
         route = cgi.escape(self.request.get('route'))
         buses = self.buses_for_route(route)
         self.response.out.write(json.dumps([bus.attrs for bus in buses]))
+
 
 class MainPage(webapp.RequestHandler):
     def get(self):
@@ -106,6 +131,7 @@ class MainPage(webapp.RequestHandler):
 application = webapp.WSGIApplication([('/', MainPage), 
                                       ('/Paths', Paths),
                                       ('/Buses', Buses),
+                                      ('/Routes', Routes),
                                      ], debug=True)
 
 def main():

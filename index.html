@@ -16,7 +16,6 @@
    var routeConfig = bus_feed + "routeConfig";
    var vehicleLocations = bus_feed + "vehicleLocations";
 
-
    function draw_buses(map, busarr, route) {
 
      $.getJSON('/Buses?route=' + route, function(buses) {
@@ -51,49 +50,57 @@
       });
    }
 
-   function draw_routes(map, route, busarr) {
-      $.getJSON('/Paths?route=' + route, function(paths) {
+   function draw_routes(map, route, n_buses, busarr) {
+      $.getJSON('/Buses?route=' + route, function(buses) {
+         var n_buses = buses.length;
+         var opacity = n_buses/15;
+         var weight = n_buses/8+1;
 
-         for (path_no in paths) {
-            var coords = new Array();
-            for (point_no in paths[path_no]) {
-                var point = paths[path_no][point_no];
-                coords.push( new google.maps.LatLng(point.lat, point.lng) );
-            }
+         $.getJSON('/Paths?route=' + route, function(paths) {
 
+            for (path_no in paths) {
+               var coords = new Array();
+               for (point_no in paths[path_no]) {
+                   var point = paths[path_no][point_no];
+                   coords.push( new google.maps.LatLng(point.lat, point.lng) );
+               }
 
-            //alert(coords);
+               var buspath = new google.maps.Polyline({
+                   path: coords,
+                   strokeColor: "#FF0000",
+                   strokeOpacity: opacity,
+                   strokeWeight: weight
+               });
 
-            var buspath = new google.maps.Polyline({
-                path: coords,
-                strokeColor: "#FF0000",
-                strokeOpacity: 1.0,
-                strokeWeight: 2
-            });
-
-            buspath.setMap(map);
-            google.maps.event.addListener(buspath, "click", function() {
-              draw_buses(map, busarr, route);
-            });
-        }
-        //draw_buses(map, busarr, route);
+               buspath.setMap(map);
+               google.maps.event.addListener(buspath, "click", function() {
+                 draw_buses(map, busarr, route);
+               });
+           }
+           //draw_buses(map, busarr, route);
+         });
       });
    }
 
    function initialize() {
     var latlng = new google.maps.LatLng(42.4, -71.1);
     var myOptions = {
-      zoom: 12,
+      zoom: 11,
       center: latlng,
       mapTypeId: google.maps.MapTypeId.ROADMAP
     };
     var map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);
 
-    draw_routes(map, "77", new Array());
-    draw_routes(map, "78", new Array());
-    draw_routes(map, "74", new Array());
-    draw_routes(map, "72", new Array());
-    draw_routes(map, "75", new Array());
+    $.getJSON('/Routes', function(routes) {
+       for (route_no in routes) {
+          draw_routes(map, routes[route_no], new Array());
+       }
+    });
+    //draw_routes(map, "77", new Array());
+    //draw_routes(map, "74", new Array());
+    //draw_routes(map, "72", new Array());
+    //draw_routes(map, "78", new Array());
+    //draw_routes(map, "75", new Array());
   }
 
 </script>
