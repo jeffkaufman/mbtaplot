@@ -17,7 +17,7 @@ uses:
     - show all routes
      - very slow, may crash your browser
 
-  http://mbtaplot.appspot.com/?routes=77,78,72?shading=true
+  http://mbtaplot.appspot.com/?routes=77,78,72&shading=true
     - shade and size routes by the number of buses currently on them
     - ideally we'd merge sections over the same area so we could size
       them properly, but we don't
