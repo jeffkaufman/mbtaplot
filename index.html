@@ -12,9 +12,18 @@
     src="http://maps.google.com/maps/api/js?sensor=false">
 </script>
 <script type="text/javascript">
-   var bus_feed = "http://webservices.nextbus.com/service/publicXMLFeed?a=mbta&command=";
-   var routeConfig = bus_feed + "routeConfig";
-   var vehicleLocations = bus_feed + "vehicleLocations";
+   var image_cache = new Array();
+   function load_image(heading) {
+      if (image_cache[heading] == null) {
+         image_cache[heading] = new google.maps.MarkerImage(
+            "http://www.google.com/intl/en_ALL/mapfiles/dir_" + heading + ".png",
+            new google.maps.Size(24, 24), // size
+            new google.maps.Point(0, 0), // origin
+            new google.maps.Point(12, 12) //anchor
+         );
+      }
+      return image_cache[heading];
+   }
 
    var max_lat = null;
    var min_lat = null;
@@ -46,38 +55,40 @@
        }
     }
 
-
     function draw_buses(map, busarr, route) {
  
      $.getJSON('/Buses?route=' + route, function(buses) {
 
-        while (busarr.length > 0) {
-           busarr[0].setMap(null);
-           busarr.shift();
-        }
-
         for (bus_no in buses) {
           var bus = buses[bus_no];
+          var busid = route + ":" + bus.id;
+          var bus_title = busid + " -- age " + bus.age;
+          var blatlng = new google.maps.LatLng(bus.elat, bus.elon);
 
-          var bimage = new google.maps.MarkerImage(
-            "http://www.google.com/intl/en_ALL/mapfiles/dir_" + bus.roundHeading + ".png",
-            new google.maps.Size(24, 24), // size
-            new google.maps.Point(0, 0), // origin
-            new google.maps.Point(12, 12) //anchor
-          );
+          if (busarr[busid] == null) {
+            var bmarker = new google.maps.Marker({
+              position: blatlng,
+              title:bus_title + " (new)"
+            });
+            busarr[busid] = bmarker;
+            bmarker.setMap(map);
+          }
+          
+          busarr[busid].setIcon(load_image(bus.rhead));
+          busarr[busid].setPosition(blatlng);
+          busarr[busid].setTitle(bus_title);
 
-          var blatlng = new google.maps.LatLng(bus.lat, bus.lon);
-          update_bounds(bus.lat, bus.lng)
-          var bmarker = new google.maps.Marker({
-            icon: bimage,
-            position: blatlng,
-            title:bus.routeTag + ":" + bus.id + " -- age " + bus.secsSinceReport
-          });
-
-          bmarker.setMap(map);
-          busarr.push(bmarker);
+          // only update for paths
+          //update_bounds(bus.elat, bus.elng)
         }
       });
+    }
+
+    function draw_buses_continual(map, busarr, buses) {
+      function draw() {
+        draw_buses(map, busarr, buses);
+      }
+      setInterval(draw, 2 * 1000);
     }
 
     function draw_routes(map, route, busarr) {
@@ -119,7 +130,7 @@
                recenter();
            }
            {% if buses %}
-             draw_buses(map, busarr, route);
+              draw_buses_continual(map, busarr, route);
            {% endif %}
          });
 

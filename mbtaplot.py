@@ -14,14 +14,69 @@ BUS_FEED="http://webservices.nextbus.com/service/publicXMLFeed?"
 
 class Bus(object):
     def __init__(self, xml_vehicle):
-        self.attrs = {}
         for attribute in ("dirTag", "heading", "id", "lat", "lon", "routeTag", "secsSinceReport"):
-            self.attrs[attribute] = xml_vehicle.getAttribute(attribute)
-        self.attrs["roundHeading"] = self.round_heading
-        
+            setattr(self, attribute, xml_vehicle.getAttribute(attribute))
+        self.t = time.time() - int(self.secsSinceReport)
+        del self.secsSinceReport
+
+        self.oldT = self.t
+        self.oldLat = self.lat
+        self.oldLon = self.lon
+
+    @property
+    def age(self):
+        return time.time() - self.t
+
+    @property
+    def oldAge(self):
+        return time.time() - self.oldT
+
     @property
     def round_heading(self):
-        return (int(int(self.attrs["heading"])/3)*3)%120
+        return (int(int(self.heading)/3)*3)%120
+
+    def estimate_pos(self, l_i, l_j):
+        l_i, l_j = float(l_i), float(l_j)
+
+        t_i = self.oldT
+        t_j = self.t
+        t_k = time.time()
+
+        if abs(l_i - l_j) < .00001 or int(t_i) == int(t_j):
+            return l_j
+
+        delta_t = t_j - t_i
+        delta_l = l_j - l_i
+        
+        l_k = l_j + (t_k-t_j)*(l_j-l_i)/(t_j-t_i)
+
+        return l_k
+
+    @property
+    def elat(self):
+        return self.estimate_pos(self.oldLat, self.lat)
+
+    @property
+    def elon(self):
+        return self.estimate_pos(self.oldLon, self.lon)
+
+    def sendable(self):
+        return {
+            "elat": self.elat,
+            "elon": self.elon,
+            "id": self.id,
+            "age": int(self.age),
+            "rhead": self.round_heading,
+            
+            "lat": self.lat,
+            "lon": self.lon,
+            
+            "oldLat": self.oldLat,
+            "oldLon": self.oldLon,
+
+            "t": self.t,
+            "oldT": self.oldT,
+            }
 
 class BusRoute(object):
     def __init__(self, route_num):
@@ -38,24 +93,46 @@ class BusRoute(object):
 
         return [Path(p) for p in xmldoc.getElementsByTagName("path")]
 
-    def buses(self):        
+    def buses(self):
         use_url = BUS_FEED + "&".join(("command=vehicleLocations",
                                        "a=mbta",
                                        "r=%s" % self.route_num,
                                        #"t=%s" % int(time.time())
                                        "t=0"
                                        ))
-        
+
         usock = urllib2.urlopen(use_url)
         xmldoc = minidom.parse(usock)
         usock.close()
-        
-        return [Bus(vehicle) for vehicle in xmldoc.getElementsByTagName("vehicle")]
+
+        bus_hash = {}
+        for vehicle in xmldoc.getElementsByTagName("vehicle"):
+            bus = Bus(vehicle)
+            bus_hash[bus.id] = bus
+
+        return bus_hash
 
     @staticmethod
-    def age_buses(buses, time_diff):
-        for bus in buses:
-            bus.attrs["secsSinceReport"] = int(bus.attrs["secsSinceReport"]) + time_diff
+    def update_buses(old_buses, new_buses):
+        for bus_id, new_bus in new_buses.items():
+            try:
+                old_bus = old_buses[new_bus.id]
+            except KeyError:
+                continue
+
+            if old_bus.age - new_bus.age < 5:
+                """ if the new bus is not at least 5sec more recently
+                    updated than the old bus, don't update previous
+                    position and report time """
+                new_bus.oldT = old_bus.oldT
+                new_bus.oldLat = old_bus.oldLat
+                new_bus.oldLon = old_bus.oldLon
+            else:
+                new_bus.oldT = old_bus.t
+                new_bus.oldLat = old_bus.lat
+                new_bus.oldLon = old_bus.lon
+
+        return new_buses
 
     @staticmethod
     def allRoutes():
@@ -65,7 +142,8 @@ class BusRoute(object):
         xmldoc = minidom.parse(usock)
         usock.close()
 
-        return [BusRoute(route.getAttribute("title")) for route in xmldoc.getElementsByTagName("route")]
+        return [BusRoute(route.getAttribute("title")) 
+                for route in xmldoc.getElementsByTagName("route")]
 
 class Point(object):
     def __init__(self, xml_point):
@@ -96,32 +174,38 @@ class Routes(webapp.RequestHandler):
         routes = BusRoute.allRoutes()
         self.response.out.write(json.dumps([route.route_num for route in routes]))
 
-        
+
 class Buses(webapp.RequestHandler):
     cache = {}
-    def buses_for_route(self, route):
-        now = time.time()
-        if route in self.cache:
+    def buses(self, route):
+        try:
             timestamp, buses = self.cache[route]
-            time_diff = int(now - timestamp)
-            if time_diff < 45:
-                BusRoute.age_buses(buses, time_diff)
-                self.cache[route] = now, buses
-                return buses
+            return buses
+        except KeyError:
+            return {}
 
-        buses = BusRoute(route).buses()
-        self.cache[route] = (now, buses)
-        return buses
+    def timestamp(self, route):
+        try:
+            timestamp, buses = self.cache[route]
+            return timestamp
+        except KeyError:
+            return 0
 
     def get(self):
         route = cgi.escape(self.request.get('route'))
-        buses = self.buses_for_route(route)
-        self.response.out.write(json.dumps([bus.attrs for bus in buses]))
+        now = time.time()
+        if now - self.timestamp(route) > 12:
+            new_buses = BusRoute.update_buses(self.buses(route), 
+                                              BusRoute(route).buses())
+            self.cache[route] = now, new_buses
+
+        self.response.out.write(json.dumps(
+                [bus.sendable() for bus in self.buses(route).values()]))
 
 
 class MainPage(webapp.RequestHandler):
     def get(self):
-        
+
         buses = cgi.escape(self.request.get('buses')).lower() == "true"
         shading = cgi.escape(self.request.get('shading')).lower() == "true"
         all_routes = False
@@ -140,11 +224,11 @@ class MainPage(webapp.RequestHandler):
                            "all_routes": all_routes,
                            "buses": buses,
                            "routes": routes}
-        
+
         path = os.path.join(os.path.dirname(__file__), 'index.html')
         self.response.out.write(template.render(path, template_values))
 
-application = webapp.WSGIApplication([('/', MainPage), 
+application = webapp.WSGIApplication([('/', MainPage),
                                       ('/Paths', Paths),
                                       ('/Buses', Buses),
                                       ('/Routes', Routes),
