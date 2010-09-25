@@ -39,21 +39,6 @@ class Bus(object):
     def round_heading(self):
         return (int(int(self.heading)/3)*3)%120
 
-    def estimate_pos(self, l_i, l_j):
-        t_i = self.oldT
-        t_j = self.t
-        t_k = time.time()
-
-        if abs(l_i - l_j) < .00001 or int(t_i) == int(t_j):
-            return l_j
-
-        delta_t = t_j - t_i
-        delta_l = l_j - l_i
-
-        l_k = l_j + (t_k-t_j)*(l_j-l_i)/(t_j-t_i)
-
-        return l_k
-
     @property
     def elat(self):
         return self.estimate_pos(self.oldLat, self.lat)
@@ -62,73 +47,17 @@ class Bus(object):
     def elon(self):
         return self.estimate_pos(self.oldLon, self.lon)
 
-    def sendable(self, snap, estimate):
-        if estimate:
-            lat, lon = self.elat, self.elon
-        else:
-            lat, lon = self.lat, self.lon
-
-        if snap:
-            lat, lon = snap_to_path(self.routeTag, lat, lon)
-
+    def sendable(self):
         return {
-            "elat": lat,
-            "elon": lon,
+            "lat_i": self.oldLat,
+            "lon_i": self.oldLon,
+            "lat_j": self.lat,
+            "lon_j": self.lon,
             "id": self.id,
-            "age": int(self.age),
+            "age_i": int(self.oldAge),
+            "age_j": int(self.age),
             "rhead": self.round_heading,
             }
-
-def distance(x1,y1,x2,y2):
-    return (x1-x2)*(x1-x2) + (y1-y2)*(y1-y2)
-
-def closest_point_on_line(line, x3, y3):
-    """ from http://local.wasp.uwa.edu.au/~pbourke/geometry/pointline/ """
-    x1, y1, x2, y2 = line
-
-    u = ((x3-x1)*(x2-x1) + (y3-y1)*(y2-y1)) / distance(*line)
-
-    if u < 0 or u > 1:
-        """ use one of the ends """
-        if distance(x1,y1,x3,y3) > distance(x2,y2,x3,y3):
-            return x2,y2
-        else:
-            return x1,y1
-    else:
-        """ use a point on the line """
-
-        x4 = x1 + u*(x2 - x1)
-        y4 = y1 + u*(y2 - y1)
-        
-        return x4, y4
-
-def distance_to_line(line, x3, y3):
-    """ from http://local.wasp.uwa.edu.au/~pbourke/geometry/pointline/ """
-    x1, y1, x2, y2 = line
-
-    x4, y4 = closest_point_on_line(line, x3, y3)
-    return distance(x4, y4, x3, y3)
-
-
-def snap_to_path(route, lat, lon):
-    best_line = None
-    best_dist = None
-
-    for path in request_paths(route):
-
-        for p_i, p_j in zip(path[:-1], path[1:]):
-            line = p_i.lat, p_i.lon, p_j.lat, p_j.lon
-
-            dist = distance_to_line(line, lat, lon)
-            if best_line == None or dist < best_dist:
-                best_line = line
-                best_dist = dist
-
-    if best_line is None or best_dist > .00001:
-        """ if we failed to find a good line, or if we'd be adjusting too far, do nothing """
-        return lat, lon
-
-    return closest_point_on_line(best_line, lat, lon)
 
 
 def request_paths(route_num, path_cache={}):
@@ -219,7 +148,7 @@ class Paths(webapp.RequestHandler):
         route = cgi.escape(self.request.get('route'))
         if route not in self.cache:
             self.cache[route] = json.dumps([[{"lat": point.lat,
-                                              "lng": point.lon}
+                                              "lon": point.lon}
                                              for point in path]
                                             for path in request_paths(route)])
         self.response.out.write(self.cache[route])
@@ -249,9 +178,6 @@ class Buses(webapp.RequestHandler):
 
     def get(self):
         route = cgi.escape(self.request.get('route'))
-        
-        snap = cgi.escape(self.request.get('snap')).lower() != "false"
-        est = cgi.escape(self.request.get('est')).lower() != "false"
 
         now = time.time()
         if now - self.timestamp(route) > 12:
@@ -262,7 +188,7 @@ class Buses(webapp.RequestHandler):
             self.cache[route] = now, new_buses
 
         self.response.out.write(json.dumps(
-                [bus.sendable(snap, est) for bus in self.buses(route).values()]))
+                [bus.sendable() for bus in self.buses(route).values()]))
 
 
 class MainPage(webapp.RequestHandler):

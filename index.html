@@ -12,7 +12,14 @@
     src="http://maps.google.com/maps/api/js?sensor=false">
 </script>
 <script type="text/javascript">
-   var image_cache = new Array();
+   var image_cache = new Object(); // heading -> marker
+   var path_cache = new Object();  // route -> path[]
+   var bus_cache = new Object();   // route -> bus[]
+
+   function curtime() {
+      return (new Date()).getTime()/1000;
+   }
+
    function load_image(heading) {
       if (image_cache[heading] == null) {
          image_cache[heading] = new google.maps.MarkerImage(
@@ -29,6 +36,89 @@
    var min_lat = null;
    var max_lng = null;
    var min_lng = null;
+
+   function distance(x1,y1,x2,y2) {
+     // really distance squared, but no one cares
+     return (x1-x2)*(x1-x2) + (y1-y2)*(y1-y2);
+   }
+
+   function closest_point_on_line(x1, y1, x2, y2, x3, y3) {
+      // from http://local.wasp.uwa.edu.au/~pbourke/geometry/pointline/
+      var u = ((x3-x1)*(x2-x1) + (y3-y1)*(y2-y1)) / distance(x1, y1, x2, y2);
+
+      if (u < 0 || u > 1) {
+         // use one of the ends
+         if (distance(x1,y1,x3,y3) > distance(x2,y2,x3,y3)) {
+             return [x2,y2];
+         }
+         else {
+             return [x1,y1];
+         }
+      }
+      else {
+        // use a point on the line 
+
+        var x4 = x1 + u*(x2 - x1);
+        var y4 = y1 + u*(y2 - y1);
+        
+        return [x4,y4];
+      }
+   }
+
+   function distance_to_line(x1, y1, x2, y2, x3, y3) {
+      var cpol = closest_point_on_line(x1, y1, x2, y2, x3, y3);
+      return distance(cpol[0], cpol[1], x3, y3);
+   }
+
+
+   function snap_to_path(route, lat, lon) {
+     var best_line = null;
+     var best_dist = null;
+
+     if (!(route in path_cache)) {
+        return [lat, lon];
+     }
+     
+     paths = path_cache[route];
+
+     for (path_no in paths) {
+        for (point_no in paths[path_no]) {
+           if (point_no > 0) {
+              var p_i = paths[path_no][point_no-1];
+              var p_j = paths[path_no][point_no];
+              var dist = distance_to_line(p_i.lat, p_i.lon, p_j.lat, p_j.lon, lat, lon);
+              if (best_line == null || dist < best_dist) {
+                 best_line = [p_i.lat, p_i.lon, p_j.lat, p_j.lon];
+                 best_dist = dist;
+              }
+           }
+        }
+     }
+
+     if (best_line == null || best_dist > .00001) {
+        // if we failed to find a good line, or if we'd be adjusting too far, do nothing
+        return [lat,lon];
+     }
+     return closest_point_on_line(best_line[0], best_line[1],
+                                  best_line[2], best_line[3],
+                                  lat, lon);
+   }
+
+   function estimate_pos(age_i, age_j, req_time, l_i, l_j) {
+     var t_i = req_time - age_i;
+     var t_j = req_time - age_j;
+     var t_k = curtime();
+
+     if (Math.abs(l_i - l_j) < .00001 || t_i == t_j) {
+        return l_j;
+     }
+
+     var delta_t = t_j - t_i;
+     var delta_l = l_j - l_i;
+     var l_k = l_j + (t_k-t_j)*(l_j-l_i)/(t_j-t_i);
+     return l_k;
+   }
+
 
    function update_bounds(lat, lng) {
      if (max_lat == null || lat > max_lat ) { max_lat = lat; }
@@ -54,19 +144,31 @@
           map.fitBounds(new google.maps.LatLngBounds(sw, ne));
        }
     }
+    
+    function plot_buses(route, busarr) {
+       timestamp = bus_cache[route][0];
+       buses = bus_cache[route][1];
 
-    function draw_buses(map, busarr, route) {
- 
-     $.getJSON('/Buses?route=' + route +
-                      '&snap=' + document.settings.snap.checked +
-                      '&est=' + document.settings.est.checked ,
-      function(buses) {
-
-        for (bus_no in buses) {
+       for (bus_no in buses) {
           var bus = buses[bus_no];
           var busid = route + ":" + bus.id;
-          var bus_title = busid + " -- age " + bus.age;
-          var blatlng = new google.maps.LatLng(bus.elat, bus.elon);
+          var bus_title = busid + " -- age " + bus.age_j;
+
+          var lat = bus.lat_j;
+          var lon = bus.lon_j;
+
+          if (document.settings.est.checked) {
+             lat = estimate_pos(bus.age_i, bus.age_j, timestamp, bus.lat_i, bus.lat_j);
+             lon = estimate_pos(bus.age_i, bus.age_j, timestamp, bus.lon_i, bus.lon_j);
+          }
+
+          if (document.settings.snap.checked) {
+             cpol = snap_to_path(route, lat, lon);
+             lat = cpol[0];
+             lon = cpol[1];
+          }
+
+          var blatlng = new google.maps.LatLng(lat, lon);
 
           if (busarr[busid] == null) {
             var bmarker = new google.maps.Marker({
@@ -82,16 +184,35 @@
           busarr[busid].setTitle(bus_title);
 
           // only update for paths
-          //update_bounds(bus.elat, bus.elng)
-        }
-      });
+          //update_bounds(lat, lon);
+       }
+    }
+    
+
+    function draw_buses(map, busarr, route) {
+       if (route in bus_cache && bus_cache[route][0] == -1) {
+          return;
+       }
+
+       // only request from server every 15 sec
+       if (route in bus_cache && (curtime() - bus_cache[route][0] < 15)) {
+          plot_buses(route, busarr);
+       }
+       else {
+          bus_cache[route] = [-1, []]; // so that we know we are updating and don't plot
+          
+          $.getJSON('/Buses?route=' + route, function(buses) {
+              bus_cache[route] = [curtime(), buses];
+              plot_buses(route, busarr);
+          });
+       }
     }
 
     function draw_buses_continual(map, busarr, buses) {
-      function draw() {
-        draw_buses(map, busarr, buses);
-      }
-      setInterval(draw, 2 * 1000);
+      setInterval(function() {
+        draw_buses(map, busarr, buses); },
+        100
+      );
     }
 
     function draw_routes(map, route, busarr) {
@@ -110,12 +231,14 @@
 
          $.getJSON('/Paths?route=' + route, function(paths) {
 
+            path_cache[route] = paths;
+
             for (path_no in paths) {
                var coords = new Array();
                for (point_no in paths[path_no]) {
                    var point = paths[path_no][point_no];
-                   update_bounds(point.lat, point.lng)
-                   coords.push( new google.maps.LatLng(point.lat, point.lng) );
+                   update_bounds(point.lat, point.lon)
+                   coords.push( new google.maps.LatLng(point.lat, point.lon) );
                }
 
                var buspath = new google.maps.Polyline({
@@ -145,17 +268,21 @@
     {% if all_routes %}
       $.getJSON('/Routes', function(routes) {
          for (route_no in routes) {
-            draw_routes(map, routes[route_no], new Array());
+            draw_routes(map, routes[route_no], new Object());
          }
       });
     {% else %}
        {% for route in routes %}
-          draw_routes(map, {{route}}, new Array());
+          draw_routes(map, {{route}}, new Object());
        {% endfor %}
     {% endif %}
 
     
-  }
+   }
+
+
+   
+    
 
 </script>
 </head>
