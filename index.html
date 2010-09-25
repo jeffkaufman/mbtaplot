@@ -49,15 +49,18 @@
 
     function recenter () {
        if (max_lat != null && min_lat != null && max_lng != null && min_lng != null) {
-          var sw = new google.maps.LatLng(min_lat, min_lng);
-          var ne = new google.maps.LatLng(max_lat, max_lng);
+          var sw = new google.maps.LatLng(min_lat, max_lng);
+          var ne = new google.maps.LatLng(max_lat, min_lng);
           map.fitBounds(new google.maps.LatLngBounds(sw, ne));
        }
     }
 
     function draw_buses(map, busarr, route) {
  
-     $.getJSON('/Buses?route=' + route, function(buses) {
+     $.getJSON('/Buses?route=' + route +
+                      '&snap=' + document.settings.snap.checked +
+                      '&est=' + document.settings.est.checked ,
+      function(buses) {
 
         for (bus_no in buses) {
           var bus = buses[bus_no];
@@ -157,5 +160,14 @@
 </script>
 </head>
 <body onload="initialize()">
-  <div id="map_canvas" style="width:100%; height:100%"></div>
+  <div id="options" style="width:100%; height:3%">
+
+    <form name="settings">
+      <input type="checkbox" name="est" checked="{{est}}"> Estimate Locations &nbsp;&nbsp;&nbsp;
+      <input type="checkbox" name="snap" checked="{{snap}}"> Snap to Route
+    </form>
+
+  </div>
+
+  <div id="map_canvas" style="width:100%; height:97%"></div>
 </body> </html>
