@@ -33,6 +33,13 @@ html,body,all
    var path_cache = new Object();  // route -> path[]
    var bus_cache = new Object();   // route -> bus[]
 
+   var stop_image = new google.maps.MarkerImage(
+       "static/stop.png",
+       new google.maps.Size(8, 8), // size
+       new google.maps.Point(0, 0), // origin
+       new google.maps.Point(4, 4) //anchor
+   );
+
    function curtime() {
       return (new Date()).getTime()/1000;
    }
@@ -246,14 +253,13 @@ html,body,all
          var weight = 2.0;
       {% endif %}
 
-         $.getJSON('/Paths?route=' + route, function(paths) {
+         $.getJSON('/Paths?route=' + route, function(r) {
+            path_cache[route] = r.paths;
 
-            path_cache[route] = paths;
-
-            for (path_no in paths) {
+            for (path_no in r.paths) {
                var coords = new Array();
-               for (point_no in paths[path_no]) {
-                   var point = paths[path_no][point_no];
+               for (point_no in r.paths[path_no]) {
+                   var point = r.paths[path_no][point_no];
                    update_bounds(point.lat, point.lon)
                    coords.push( new google.maps.LatLng(point.lat, point.lon) );
                }
@@ -271,10 +277,24 @@ html,body,all
                });
 
                recenter();
-           }
-           {% if buses %}
-              draw_buses_continual(map, busarr, route);
-           {% endif %}
+            }
+            
+            for (stop_no in r.stops) {
+              var stop = r.stops[stop_no];
+              var slatlng = new google.maps.LatLng(stop.lat, stop.lon);
+
+              var smarker = new google.maps.Marker({
+                position: slatlng,
+                title: stop.title,
+                icon: stop_image,
+
+                map: map    
+              });
+            }
+
+            {% if buses %}
+               draw_buses_continual(map, busarr, route);
+            {% endif %}
          });
 
       {% if shading %}

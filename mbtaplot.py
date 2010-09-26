@@ -23,38 +23,30 @@ class Bus(object):
         self.lat = float(self.lat)
         self.lon = float(self.lon)
 
-        self.oldT = self.t
-        self.oldLat = self.lat
-        self.oldLon = self.lon
+        self.pred_t = self.t
+        self.pred_lat = self.lat
+        self.pred_lon = self.lon
 
     @property
     def age(self):
         return time.time() - self.t
 
     @property
-    def oldAge(self):
-        return time.time() - self.oldT
+    def predAge(self):
+        return time.time() - self.pred_t
 
     @property
     def round_heading(self):
         return (int(int(self.heading)/3)*3)%120
 
-    @property
-    def elat(self):
-        return self.estimate_pos(self.oldLat, self.lat)
-
-    @property
-    def elon(self):
-        return self.estimate_pos(self.oldLon, self.lon)
-
     def sendable(self):
         return {
-            "lat_i": self.oldLat,
-            "lon_i": self.oldLon,
+            "lat_i": self.pred_lat,
+            "lon_i": self.pred_lon,
             "lat_j": self.lat,
             "lon_j": self.lon,
             "id": self.id,
-            "age_i": int(self.oldAge),
+            "age_i": int(self.predAge),
             "age_j": int(self.age),
             "rhead": self.round_heading,
             }
@@ -63,6 +55,7 @@ class Bus(object):
 def request_paths(route_num, path_cache={}):
     # path cache shared between calls
     # never updates path cache
+    # returns: paths, directions, stops
 
     if route_num not in path_cache:
         use_url = BUS_FEED + "&".join(("command=routeConfig",
@@ -73,8 +66,63 @@ def request_paths(route_num, path_cache={}):
         xmldoc = minidom.parse(usock)
         usock.close()
 
-        path_cache[route_num] = [Path(p) for p in xmldoc.getElementsByTagName("path")]
+        stops = {}
+        for s in xmldoc.getElementsByTagName("route")[0].getElementsByTagName("stop"):
+            stop = Stop(s)
+            if stop.lat and stop.tag not in stops:
+                stops[stop.tag] = stop
+
+        directions = {}
+        for d in xmldoc.getElementsByTagName("direction"):
+            direction = Direction(d, stops)
+            directions[direction.tag] = direction
+
+        paths = [Path(p) for p in xmldoc.getElementsByTagName("path")]
+
+        path_cache[route_num] = paths, directions, stops
+
     return path_cache[route_num]
+
+def distance(x1,y1,x2,y2):
+    return (x1-x2)*(x1-x2) + (y1-y2)*(y1-y2)
+
+def request_predictions(route_num, bus_hash):
+    paths, directions, stops = request_paths(route_num)
+    use_url = BUS_FEED + "&".join(("command=predictionsForMultiStops", "a=mbta", ))
+
+    for stop in stops.values():
+        use_url += "&stops=%s|%s" % (route_num, stop.tag)
+
+    #sys.stderr.write(use_url+"\n\n")
+
+    usock = urllib2.urlopen(use_url)
+    xmldoc = minidom.parse(usock)
+    usock.close()
+
+    vehicle_predictions = {}
+
+    for predictions in xmldoc.getElementsByTagName("predictions"):
+        stop = stops[predictions.getAttribute("stopTag")]
+        for prediction in predictions.getElementsByTagName("prediction"):
+            minutes = int(prediction.getAttribute("minutes"))
+            vehicle = prediction.getAttribute("vehicle")
+
+            if minutes < 2:
+                continue
+
+            if vehicle not in vehicle_predictions or minutes < vehicle_predictions[vehicle][0]:
+                vehicle_predictions[vehicle] = minutes, stop.lat, stop.lon
+            elif minutes == vehicle_predictions[vehicle][0]:
+                c_lat = bus_hash[vehicle].lat
+                c_lon = bus_hash[vehicle].lon
+
+                o_minutes, o_lat, o_lon = vehicle_predictions[vehicle]
+
+                if distance(c_lat, c_lon, stop.lat, stop.lon) < distance(c_lat, c_lon, o_lat, o_lon):
+                    vehicle_predictions[vehicle] = minutes, stop.lat, stop.lon
+
+    return vehicle_predictions
+    
 
 def request_buses(route_num):
     use_url = BUS_FEED + "&".join(("command=vehicleLocations",
@@ -93,29 +141,13 @@ def request_buses(route_num):
         bus = Bus(vehicle)
         bus_hash[bus.id] = bus
 
+    for bus_id, prediction in request_predictions(route_num, bus_hash).items():
+        minutes, stop_lat, stop_lon = prediction
+        bus_hash[bus_id].pred_t = time.time()+minutes*60+30
+        bus_hash[bus_id].pred_lat = stop_lat
+        bus_hash[bus_id].pred_lon = stop_lon
+
     return bus_hash
-
-
-def update_buses(old_buses, new_buses):
-    for bus_id, new_bus in new_buses.items():
-        try:
-            old_bus = old_buses[new_bus.id]
-        except KeyError:
-            continue
-
-        if old_bus.age - new_bus.age < 5:
-            """ if the new bus is not at least 5sec more recently
-            updated than the old bus, don't update previous
-            position and report time """
-            new_bus.oldT = old_bus.oldT
-            new_bus.oldLat = old_bus.oldLat
-            new_bus.oldLon = old_bus.oldLon
-        else:
-            new_bus.oldT = old_bus.t
-            new_bus.oldLat = old_bus.lat
-            new_bus.oldLon = old_bus.lon
-
-    return new_buses
 
 
 def allRoutes():
@@ -141,16 +173,38 @@ class Path(object):
     def __getitem__(self, x):
         return self.points[x]
 
+class Stop(object):
+    def __init__(self, xml_stop):
+        for attribute in ("tag", "title", "dirTag", "lat", "lon"):
+            setattr(self, attribute, xml_stop.getAttribute(attribute))
+        if self.lat:
+            self.lat = float(self.lat)
+        if self.lon:
+            self.lon = float(self.lon)
+
+
+class Direction(object):
+    def __init__(self, xml_direction, stops):
+        for attribute in ("tag", "title", "name"):
+            setattr(self, attribute, xml_direction.getAttribute(attribute))
+            
+        self.stops = [stops[s.getAttribute("tag")] 
+                      for s in xml_direction.getElementsByTagName("stop")]
+
 class Paths(webapp.RequestHandler):
     cache = {}
 
     def get(self):
         route = cgi.escape(self.request.get('route'))
         if route not in self.cache:
-            self.cache[route] = json.dumps([[{"lat": point.lat,
-                                              "lon": point.lon}
-                                             for point in path]
-                                            for path in request_paths(route)])
+            paths, directions, stops = request_paths(route)
+            self.cache[route] = json.dumps({"paths" : [[{"lat": point.lat, "lon": point.lon}
+                                                        for point in path]
+                                                       for path in paths],
+
+                                            "stops" : [{"lat": stop.lat, "lon": stop.lon, "title" : stop.title}
+                                                       for stop in stops.values()]})
+
         self.response.out.write(self.cache[route])
 
 
@@ -181,11 +235,9 @@ class Buses(webapp.RequestHandler):
 
         now = time.time()
         if now - self.timestamp(route) > 12:
-            """ refresh buses from server every 10sec """
+            """ refresh buses from server every Nsec """
 
-            new_buses = update_buses(self.buses(route),
-                                     request_buses(route))
-            self.cache[route] = now, new_buses
+            self.cache[route] = now, request_buses(route)
 
         self.response.out.write(json.dumps(
                 [bus.sendable() for bus in self.buses(route).values()]))
