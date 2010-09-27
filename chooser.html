@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style type="text/css">
+html,body,all
+{
+  height: 100%;
+  margin: 0px;
+  padding: 0px;
+}
+
+p.routebox
+{
+  float: left;
+  border-style: solid;
+  border-width: 1px;
+  border-color: #cccccc;
+  width: 80px;
+  padding: 4px;
+  margin: 4px;
+}
+
+div.submits
+{
+  float: left;
+  clear: both;
+}
+
+input.submits
+{
+  margin: 4px;
+}
+
+</style>
+</head>
+<body>
+
+  Choose routes to display:
+
+  <form name="settings" action="/" method="get">
+  <div class="formdiv">
+  {% for route in routes %}
+     <p class="routebox"><input type="checkbox" name="route" value="{{route.tag}}"> {{route.title}}</p>     
+  {% endfor %}
+  </table>
+  </div>
+
+  <div class="submits">
+  <input type="checkbox" name="shading" value="true"> Shading<br>
+  <input type="checkbox" name="stops" value="false"> Hide Stops<br>
+  <input type="checkbox" name="buses" value="false"> Hide Buses<br>
+  <input class="submits" type="submit" value="Display Map" name="a">
+  </div>
+  </form>
+  
+</body> </html>

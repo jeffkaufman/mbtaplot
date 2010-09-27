@@ -278,19 +278,21 @@ html,body,all
 
                recenter();
             }
-            
-            for (stop_no in r.stops) {
-              var stop = r.stops[stop_no];
-              var slatlng = new google.maps.LatLng(stop.lat, stop.lon);
 
-              var smarker = new google.maps.Marker({
-                position: slatlng,
-                title: stop.title,
-                icon: stop_image,
+            {% if stops %}
+              for (stop_no in r.stops) {
+                var stop = r.stops[stop_no];
+                var slatlng = new google.maps.LatLng(stop.lat, stop.lon);
 
-                map: map    
-              });
-            }
+                var smarker = new google.maps.Marker({
+                  position: slatlng,
+                  title: stop.title,
+                  icon: stop_image,
+
+                  map: map    
+                });
+              }
+            {% endif %}
 
             {% if buses %}
                draw_buses_continual(map, busarr, route);
@@ -305,7 +307,9 @@ html,body,all
     {% if all_routes %}
       $.getJSON('/Routes', function(routes) {
          for (route_no in routes) {
-            draw_routes(map, routes[route_no], new Object());
+            var tag = routes[route_no][0];
+            var title = routes[route_no][1];
+            draw_routes(map, tag, new Object());
          }
       });
     {% else %}

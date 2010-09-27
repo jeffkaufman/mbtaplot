@@ -106,6 +106,8 @@ def request_predictions(route_num, bus_hash):
         for prediction in predictions.getElementsByTagName("prediction"):
             minutes = int(prediction.getAttribute("minutes"))
             vehicle = prediction.getAttribute("vehicle")
+            if vehicle not in bus_hash:
+                continue
 
             if minutes < 2:
                 continue
@@ -157,7 +159,7 @@ def allRoutes():
     xmldoc = minidom.parse(usock)
     usock.close()
 
-    return [BusRoute(route.getAttribute("title"))
+    return [[route.getAttribute("tag"), route.getAttribute("title")]
             for route in xmldoc.getElementsByTagName("route")]
 
 class Point(object):
@@ -210,8 +212,7 @@ class Paths(webapp.RequestHandler):
 
 class Routes(webapp.RequestHandler):
     def get(self):
-        routes = allRoutes()
-        self.response.out.write(json.dumps([route.route_num for route in routes]))
+        self.response.out.write(json.dumps(allRoutes()))
 
 
 class Buses(webapp.RequestHandler):
@@ -245,12 +246,12 @@ class Buses(webapp.RequestHandler):
 
 class MainPage(webapp.RequestHandler):
     def get(self):
+        buses = self.request.get('buses').lower() != "false"
+        stops = self.request.get('stops').lower() != "false"
+        shading = self.request.get('shading').lower() == "true"
 
-        buses = cgi.escape(self.request.get('buses')).lower() == "true"
-        shading = cgi.escape(self.request.get('shading')).lower() == "true"
-
-        snap = cgi.escape(self.request.get('snap')).lower() != "false"
-        est = cgi.escape(self.request.get('est')).lower() != "false"
+        snap = self.request.get('snap').lower() != "false"
+        est = self.request.get('est').lower() != "false"
 
         all_routes = False
 
@@ -261,17 +262,24 @@ class MainPage(webapp.RequestHandler):
         elif routes_req:
             routes = routes_req.split(",")
 
-        if not routes:
-            routes = ["77", "78", "74", "75", "72", "94", "96"]
+        for route in self.request.get_all("route"):
+            routes.append(cgi.escape(route))
 
-        template_values = {"shading": shading,
-                           "all_routes": all_routes,
-                           "snap": snap,
-                           "est": est,
-                           "buses": buses,
-                           "routes": routes}
+        if not routes and not all_routes:
+            path = os.path.join(os.path.dirname(__file__), 'chooser.html')
 
-        path = os.path.join(os.path.dirname(__file__), 'index.html')
+            template_values = {"routes": [{"tag": tag, "title": title.split()[-1]} for tag, title in allRoutes()]}
+        else:
+            template_values = {"shading": shading,
+                               "all_routes": all_routes,
+                               "snap": snap,
+                               "est": est,
+                               "stops": stops,
+                               "buses": buses,
+                               "routes": routes}
+            
+            path = os.path.join(os.path.dirname(__file__), 'index.html')
+
         self.response.out.write(template.render(path, template_values))
 
 application = webapp.WSGIApplication([('/', MainPage),
