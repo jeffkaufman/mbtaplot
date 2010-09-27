@@ -11,6 +11,7 @@ from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
 from xml.sax.saxutils import escape
 import simplejson as json
+from google.appengine.api.urlfetch import InvalidURLError
 
 BUS_FEED="http://webservices.nextbus.com/service/publicXMLFeed?"
 
