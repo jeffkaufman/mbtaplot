@@ -15,6 +15,12 @@ from google.appengine.api.urlfetch import InvalidURLError
 
 BUS_FEED="http://webservices.nextbus.com/service/publicXMLFeed?"
 
+def get_xml(use_url):
+    usock = urllib2.urlopen(use_url)
+    xmldoc = minidom.parse(usock)
+    usock.close()
+    return xmldoc
+
 class Bus(object):
     def __init__(self, xml_vehicle):
         for attribute in ("dirTag", "heading", "id", "lat", "lon", "routeTag", "secsSinceReport"):
@@ -66,9 +72,7 @@ def request_paths(route_num, path_cache={}):
                                        ))
         
         try:
-            usock = urllib2.urlopen(use_url)
-            xmldoc = minidom.parse(usock)
-            usock.close()
+            xmldoc = get_xml(use_url)
         except InvalidURLError:
             logging.debug('request_paths: failed url: %s' % use_url)
             return [], {}, {}
@@ -133,9 +137,7 @@ def request_predictions(route_num, bus_hash):
             use_url += "&stops=%s|%s" % (route_num, stop.tag)
 
         try:
-            usock = urllib2.urlopen(use_url)
-            xmldoc = minidom.parse(usock)
-            usock.close()
+            xmldoc = get_xml(use_url)
         except InvalidURLError:
             logging.debug('request_predictions: failed url: %s' % use_url)
             return
@@ -167,9 +169,7 @@ def request_buses(route_num):
     bus_hash = {}
 
     try:
-        usock = urllib2.urlopen(use_url)
-        xmldoc = minidom.parse(usock)
-        usock.close()
+        xmldoc = get_xml(use_url)
     except InvalidURLError:
         logging.debug('request_buses: failed url: %s' % use_url)
         return bus_hash
@@ -193,9 +193,7 @@ def allRoutes():
                                        "a=mbta"))
 
     try:
-        usock = urllib2.urlopen(use_url)
-        xmldoc = minidom.parse(usock)
-        usock.close()
+        xmldoc = get_xml(use_url)
     except InvalidURLError:
         logging.debug('allRoutes: failed url: %s' % use_url)
         return []
