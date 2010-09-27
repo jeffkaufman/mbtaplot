@@ -4,6 +4,7 @@ import os
 import urllib2
 import time
 import cgi
+import logging
 import xml.dom.minidom as minidom
 from google.appengine.ext.webapp import template
 from google.appengine.ext import webapp
@@ -62,12 +63,23 @@ def request_paths(route_num, path_cache={}):
                                        "a=mbta",
                                        "r=%s" % route_num
                                        ))
-        usock = urllib2.urlopen(use_url)
-        xmldoc = minidom.parse(usock)
-        usock.close()
+        
+        try:
+            usock = urllib2.urlopen(use_url)
+            xmldoc = minidom.parse(usock)
+            usock.close()
+        except InvalidURLError:
+            logging.debug('request_paths: failed url: %s' % use_url)
+            return [], {}, {}
 
         stops = {}
-        for s in xmldoc.getElementsByTagName("route")[0].getElementsByTagName("stop"):
+        
+        xml_routes = xmldoc.getElementsByTagName("route")
+        if not xml_routes:
+            logging.debug('request_paths: system returned no route for %s\n' % route_num)
+            return [], {}, {}
+
+        for s in xml_routes[0].getElementsByTagName("stop"):
             stop = Stop(s)
             if stop.lat and stop.tag not in stops:
                 stops[stop.tag] = stop
@@ -93,13 +105,16 @@ def request_predictions(route_num, bus_hash):
     for stop in stops.values():
         use_url += "&stops=%s|%s" % (route_num, stop.tag)
 
-    #sys.stderr.write(use_url+"\n\n")
-
-    usock = urllib2.urlopen(use_url)
-    xmldoc = minidom.parse(usock)
-    usock.close()
-
+        
     vehicle_predictions = {}
+
+    try:
+        usock = urllib2.urlopen(use_url)
+        xmldoc = minidom.parse(usock)
+        usock.close()
+    except InvalidURLError:
+        logging.debug('request_predictions: failed url: %s' % use_url)
+        return vehicle_predictions
 
     for predictions in xmldoc.getElementsByTagName("predictions"):
         stop = stops[predictions.getAttribute("stopTag")]
@@ -134,11 +149,17 @@ def request_buses(route_num):
                                    "t=0"
                                    ))
 
-    usock = urllib2.urlopen(use_url)
-    xmldoc = minidom.parse(usock)
-    usock.close()
-
     bus_hash = {}
+
+    try:
+        usock = urllib2.urlopen(use_url)
+        xmldoc = minidom.parse(usock)
+        usock.close()
+    except InvalidURLError:
+        logging.debug('request_buses: failed url: %s' % use_url)
+        return bus_hash
+
+    
     for vehicle in xmldoc.getElementsByTagName("vehicle"):
         bus = Bus(vehicle)
         bus_hash[bus.id] = bus
@@ -155,9 +176,14 @@ def request_buses(route_num):
 def allRoutes():
     use_url = BUS_FEED + "&".join(("command=routeList",
                                        "a=mbta"))
-    usock = urllib2.urlopen(use_url)
-    xmldoc = minidom.parse(usock)
-    usock.close()
+
+    try:
+        usock = urllib2.urlopen(use_url)
+        xmldoc = minidom.parse(usock)
+        usock.close()
+    except InvalidURLError:
+        logging.debug('allRoutes: failed url: %s' % use_url)
+        return []
 
     return [[route.getAttribute("tag"), route.getAttribute("title")]
             for route in xmldoc.getElementsByTagName("route")]
