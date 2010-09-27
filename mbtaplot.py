@@ -101,43 +101,57 @@ def distance(x1,y1,x2,y2):
 
 def request_predictions(route_num, bus_hash):
     paths, directions, stops = request_paths(route_num)
-    use_url = BUS_FEED + "&".join(("command=predictionsForMultiStops", "a=mbta", ))
-
-    for stop in stops.values():
-        use_url += "&stops=%s|%s" % (route_num, stop.tag)
-
         
     vehicle_predictions = {}
 
-    try:
-        usock = urllib2.urlopen(use_url)
-        xmldoc = minidom.parse(usock)
-        usock.close()
-    except InvalidURLError:
-        logging.debug('request_predictions: failed url: %s' % use_url)
-        return vehicle_predictions
+    def updatePredictions(xmldoc):
+        for predictions in xmldoc.getElementsByTagName("predictions"):
+            stop = stops[predictions.getAttribute("stopTag")]
+            for prediction in predictions.getElementsByTagName("prediction"):
+                minutes = int(prediction.getAttribute("minutes"))
+                vehicle = prediction.getAttribute("vehicle")
+                if vehicle not in bus_hash:
+                    continue
 
-    for predictions in xmldoc.getElementsByTagName("predictions"):
-        stop = stops[predictions.getAttribute("stopTag")]
-        for prediction in predictions.getElementsByTagName("prediction"):
-            minutes = int(prediction.getAttribute("minutes"))
-            vehicle = prediction.getAttribute("vehicle")
-            if vehicle not in bus_hash:
-                continue
+                if minutes < 2:
+                    continue
 
-            if minutes < 2:
-                continue
-
-            if vehicle not in vehicle_predictions or minutes < vehicle_predictions[vehicle][0]:
-                vehicle_predictions[vehicle] = minutes, stop.lat, stop.lon
-            elif minutes == vehicle_predictions[vehicle][0]:
-                c_lat = bus_hash[vehicle].lat
-                c_lon = bus_hash[vehicle].lon
-
-                o_minutes, o_lat, o_lon = vehicle_predictions[vehicle]
-
-                if distance(c_lat, c_lon, stop.lat, stop.lon) < distance(c_lat, c_lon, o_lat, o_lon):
+                if vehicle not in vehicle_predictions or minutes < vehicle_predictions[vehicle][0]:
                     vehicle_predictions[vehicle] = minutes, stop.lat, stop.lon
+                elif minutes == vehicle_predictions[vehicle][0]:
+                    c_lat = bus_hash[vehicle].lat
+                    c_lon = bus_hash[vehicle].lon
+
+                    o_minutes, o_lat, o_lon = vehicle_predictions[vehicle]
+
+                    if distance(c_lat, c_lon, stop.lat, stop.lon) < distance(c_lat, c_lon, o_lat, o_lon):
+                        vehicle_predictions[vehicle] = minutes, stop.lat, stop.lon
+
+    def predict_some_stops(stop_list):
+        use_url = BUS_FEED + "&".join(("command=predictionsForMultiStops", "a=mbta", ))
+        for stop in stop_list:
+            use_url += "&stops=%s|%s" % (route_num, stop.tag)
+
+        try:
+            usock = urllib2.urlopen(use_url)
+            xmldoc = minidom.parse(usock)
+            usock.close()
+        except InvalidURLError:
+            logging.debug('request_predictions: failed url: %s' % use_url)
+            return
+
+        updatePredictions(xmldoc)
+
+    # submit stops only N at a time
+    # prevents urls from getting too long
+    cur_stops = []
+    for stop in stops.values():
+        if len(cur_stops) > 50:
+            predict_some_stops(cur_stops)
+            cur_stops = []
+        cur_stops.append(stop)
+    if cur_stops:
+        predict_some_stops(cur_stops)
 
     return vehicle_predictions
     
