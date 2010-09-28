@@ -26,6 +26,14 @@ div.submits
   clear: both;
 }
 
+div.references{
+  float: left;
+  clear: both;
+  width: 100%;
+}
+
+
+
 input.submits
 {
   margin: 4px;
@@ -34,6 +42,8 @@ input.submits
 </style>
 </head>
 <body>
+
+  <h1>MBTA Route Plotter</h1>
 
   Choose routes to display:
 
@@ -51,6 +61,14 @@ input.submits
   <input type="checkbox" name="buses" value="false"> Hide Buses<br>
   <input class="submits" type="submit" value="Display Map" name="a">
   </div>
+  
   </form>
+
+  <div class="references">
+  <hr>
+  
+  Created by <a href="http://sccs.swarthmore.edu/~cbr">Jeff Kaufman</a><br>
+  Source code at github: <a href="http://github.com/jeffkaufman/mbtaplot/">mbtaplot sources</a>
+  </div>
   
 </body> </html>
