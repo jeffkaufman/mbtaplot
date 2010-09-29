@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon"/>
 <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
 <style type="text/css">
 html,body,all
@@ -80,11 +81,11 @@ html,body,all
          }
       }
       else {
-        // use a point on the line 
+        // use a point on the line
 
         var x4 = x1 + u*(x2 - x1);
         var y4 = y1 + u*(y2 - y1);
-        
+
         return [x4,y4];
       }
    }
@@ -102,7 +103,7 @@ html,body,all
      if (!(route in path_cache)) {
         return [lat, lon];
      }
-     
+
      paths = path_cache[route];
 
      for (path_no in paths) {
@@ -128,10 +129,9 @@ html,body,all
                                   lat, lon);
    }
 
-   function estimate_pos(age_i, age_j, req_time, l_i, l_j) {
+   function estimate_pos(age_i, age_j, req_time, l_i, l_j, t_k) {
      var t_i = req_time - age_i;
      var t_j = req_time - age_j;
-     var t_k = curtime();
 
      if (Math.abs(l_i - l_j) < .00001 || t_i == t_j) {
         return l_j;
@@ -168,7 +168,29 @@ html,body,all
           map.fitBounds(new google.maps.LatLngBounds(sw, ne));
        }
     }
-    
+
+    function get_bus_position(bus, route, t_now)
+    {
+       if (document.settings.est.checked) {
+          lat = estimate_pos(bus.age_i, bus.age_j, timestamp, bus.lat_i, bus.lat_j, t_now);
+          lon = estimate_pos(bus.age_i, bus.age_j, timestamp, bus.lon_i, bus.lon_j, t_now);
+       }
+       else
+       {
+          lat = bus.lat_j;
+          lon = bus.lon_j;
+       }
+
+       if (document.settings.snap.checked) {
+          cpol = snap_to_path(route, lat, lon);
+          lat = cpol[0];
+          lon = cpol[1];
+       }
+
+       return [lat, lon]
+    }
+
+
     function plot_buses(route, busarr) {
        timestamp = bus_cache[route][0];
        buses = bus_cache[route][1];
@@ -178,21 +200,25 @@ html,body,all
           var busid = route + ":" + bus.id;
           var bus_title = busid + " -- age " + bus.age_j;
 
-          var lat = bus.lat_j;
-          var lon = bus.lon_j;
+          var t_now = curtime();
+          var lat_lon = get_bus_position(bus, route, t_now);
+          var lat_lon_1 = get_bus_position(bus, route, t_now+5);
 
-          if (document.settings.est.checked) {
-             lat = estimate_pos(bus.age_i, bus.age_j, timestamp, bus.lat_i, bus.lat_j);
-             lon = estimate_pos(bus.age_i, bus.age_j, timestamp, bus.lon_i, bus.lon_j);
+          if (document.settings.esth.checked)
+          {
+             // update heading
+             var delta_lat = lat_lon_1[0] - lat_lon[0];
+             var delta_lon = lat_lon_1[1] - lat_lon[1];
+             if (Math.abs(delta_lat) > 0.000001 && Math.abs(delta_lon) > 0.000001)
+             {
+                //var theta_r = Math.atan2(-delta_lat,-delta_lon);
+                var theta_r = Math.atan2(delta_lon,delta_lat);
+                var theta_d = (180*theta_r/Math.PI+360)%360;
+                bus.rhead = Math.round(theta_d)%120;
+             }
           }
 
-          if (document.settings.snap.checked) {
-             cpol = snap_to_path(route, lat, lon);
-             lat = cpol[0];
-             lon = cpol[1];
-          }
-
-          var blatlng = new google.maps.LatLng(lat, lon);
+          var blatlng = new google.maps.LatLng(lat_lon[0], lat_lon[1]);
 
           if (busarr[busid] == null) {
             var bmarker = new google.maps.Marker({
@@ -202,7 +228,7 @@ html,body,all
             busarr[busid] = bmarker;
             bmarker.setMap(map);
           }
-          
+
           busarr[busid].setIcon(load_image(bus.rhead));
           busarr[busid].setPosition(blatlng);
           busarr[busid].setTitle(bus_title);
@@ -211,20 +237,16 @@ html,body,all
           //update_bounds(lat, lon);
        }
     }
-    
+
 
     function draw_buses(map, busarr, route) {
-       if (route in bus_cache && bus_cache[route][0] == -1) {
-          return;
-       }
-
        // only request from server every 15 sec
-       if (route in bus_cache && (curtime() - bus_cache[route][0] < 15)) {
+       if (route in bus_cache && (curtime() - bus_cache[route][0] < 15 || bus_cache[route][0] == -1)) {
           plot_buses(route, busarr);
        }
        else {
           bus_cache[route] = [-1, []]; // so that we know we are updating and don't plot
-          
+
           $.getJSON('/Buses?route=' + route, function(buses) {
               bus_cache[route] = [curtime(), buses];
               plot_buses(route, busarr);
@@ -289,7 +311,7 @@ html,body,all
                   title: stop.title,
                   icon: stop_image,
 
-                  map: map    
+                  map: map
                 });
               }
             {% endif %}
@@ -318,12 +340,12 @@ html,body,all
        {% endfor %}
     {% endif %}
 
-    
+
    }
 
 
-   
-    
+
+
 
 </script>
 </head>
@@ -334,6 +356,7 @@ html,body,all
 
     <form name="settings">
       <input type="checkbox" name="est" checked="{{est}}"> Estimate Locations &nbsp;&nbsp;&nbsp;
+      <input type="checkbox" name="esth" checked="true"> Estimate Headings &nbsp;&nbsp;&nbsp;
       <input type="checkbox" name="snap" checked="{{snap}}"> Snap to Route
     </form>
 
