@@ -318,9 +318,12 @@ html,body,all
                  });
 
                  google.maps.event.addListener(smarker, "click", function() {
+                    t = "<h3>" + stop.title + "</h3>";
+                    stop_info_window.setContent(t + "<tt>[loading ...]</tt>");
+
                     $.getJSON('/Arrivals?stop=' + stop.tag, function(arrivals) 
                     {
-                       stop_info_window.content = "<h3>" + stop.title + "</h3><table border=\"0\">";
+                       t += "<table border=\"0\">";
                        for (arrival_no in arrivals) 
                        {
                           var minutes = arrivals[arrival_no][0];
@@ -330,13 +333,15 @@ html,body,all
                           if (minutes == "0") { minutes = "nowish"; }
                           else { minutes += "min" ; }
 
-                          stop_info_window.content += "<tr><td align=\"right\">" + minutes + ":</td><td>" +
-                              route + " " + title + "</td></tr>";
+                          t += "<tr><td align=\"right\">" + minutes + ":</td><td>" + route + " " + title + "</td></tr>";
                        }
                        
-                       stop_info_window.content += "</table>";
-                       stop_info_window.open(map,smarker);
+                       t += "</table>";
+                       stop_info_window.setContent(t);
                     });
+                       
+                    stop_info_window.open(map,smarker);
+
                  });
               }
               
