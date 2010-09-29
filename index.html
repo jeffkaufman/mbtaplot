@@ -301,18 +301,49 @@ html,body,all
             }
 
             {% if stops %}
-              for (stop_no in r.stops) {
-                var stop = r.stops[stop_no];
-                var slatlng = new google.maps.LatLng(stop.lat, stop.lon);
+              stop_info_window = new google.maps.InfoWindow({
+                    content: "not set yet"
+              });
 
-                var smarker = new google.maps.Marker({
-                  position: slatlng,
-                  title: stop.title,
-                  icon: stop_image,
+              function plot_stop(stop) 
+              {
+                 var slatlng = new google.maps.LatLng(stop.lat, stop.lon);
 
-                  map: map
-                });
+                 var smarker = new google.maps.Marker({
+                    position: slatlng,
+                    title: stop.title,
+                    icon: stop_image,
+
+                    map: map
+                 });
+
+                 google.maps.event.addListener(smarker, "click", function() {
+                    $.getJSON('/Arrivals?stop=' + stop.tag, function(arrivals) 
+                    {
+                       stop_info_window.content = "<h3>" + stop.title + "</h3><table border=\"0\">";
+                       for (arrival_no in arrivals) 
+                       {
+                          var minutes = arrivals[arrival_no][0];
+                          var route = arrivals[arrival_no][1];
+                          var title = arrivals[arrival_no][2];
+
+                          if (minutes == "0") { minutes = "nowish"; }
+                          else { minutes += "min" ; }
+
+                          stop_info_window.content += "<tr><td align=\"right\">" + minutes + ":</td><td>" +
+                              route + " " + title + "</td></tr>";
+                       }
+                       
+                       stop_info_window.content += "</table>";
+                       stop_info_window.open(map,smarker);
+                    });
+                 });
               }
+              
+              for (stop_no in r.stops) {
+                 plot_stop(r.stops[stop_no]);
+              }
+         
             {% endif %}
 
             {% if buses %}

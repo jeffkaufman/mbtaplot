@@ -70,7 +70,7 @@ def request_paths(route_num, path_cache={}):
                                        "a=mbta",
                                        "r=%s" % route_num
                                        ))
-        
+
         try:
             xmldoc = get_xml(use_url)
         except InvalidURLError:
@@ -78,7 +78,7 @@ def request_paths(route_num, path_cache={}):
             return [], {}, {}
 
         stops = {}
-        
+
         xml_routes = xmldoc.getElementsByTagName("route")
         if not xml_routes:
             logging.debug('request_paths: system returned no route for %s\n' % route_num)
@@ -105,7 +105,7 @@ def distance(x1,y1,x2,y2):
 
 def request_predictions(route_num, bus_hash):
     paths, directions, stops = request_paths(route_num)
-        
+
     vehicle_predictions = {}
 
     def updatePredictions(xmldoc):
@@ -156,7 +156,7 @@ def request_predictions(route_num, bus_hash):
         predict_some_stops(cur_stops)
 
     return vehicle_predictions
-    
+
 
 def request_buses(route_num):
     use_url = BUS_FEED + "&".join(("command=vehicleLocations",
@@ -174,7 +174,7 @@ def request_buses(route_num):
         logging.debug('request_buses: failed url: %s' % use_url)
         return bus_hash
 
-    
+
     for vehicle in xmldoc.getElementsByTagName("vehicle"):
         bus = Bus(vehicle)
         bus_hash[bus.id] = bus
@@ -228,8 +228,8 @@ class Direction(object):
     def __init__(self, xml_direction, stops):
         for attribute in ("tag", "title", "name"):
             setattr(self, attribute, xml_direction.getAttribute(attribute))
-            
-        self.stops = [stops[s.getAttribute("tag")] 
+
+        self.stops = [stops[s.getAttribute("tag")]
                       for s in xml_direction.getElementsByTagName("stop")]
 
 class Paths(webapp.RequestHandler):
@@ -243,10 +243,40 @@ class Paths(webapp.RequestHandler):
                                                         for point in path]
                                                        for path in paths],
 
-                                            "stops" : [{"lat": stop.lat, "lon": stop.lon, "title" : stop.title}
+                                            "stops" : [{"lat": stop.lat, "lon": stop.lon, "title" : stop.title, "tag": stop.tag}
                                                        for stop in stops.values()]})
 
         self.response.out.write(self.cache[route])
+
+class Arrivals(object):
+    def __init__(route, title, direction):
+        self.route = route
+        self.title = title
+
+
+class Arrivals(webapp.RequestHandler):
+    def get(self):
+        stop = cgi.escape(self.request.get('stop'))
+        use_url = BUS_FEED + "&".join(("command=predictions",
+                                       "a=mbta",
+                                       "stopId=%s" % stop))
+        try:
+            xmldoc = get_xml(use_url)
+        except InvalidURLError:
+            logging.debug('Arrivals: failed url: %s' % use_url)
+            self.response.out.write(json.dumps([]))
+            return
+
+        p = []
+        for predictions in xmldoc.getElementsByTagName("predictions"):
+            route = predictions.getAttribute("routeTitle")
+            for direction in predictions.getElementsByTagName("direction"):
+                title = direction.getAttribute("title") 
+                for prediction in direction.getElementsByTagName("prediction"):
+                    minutes = int(prediction.getAttribute("minutes"))
+                    p.append((minutes,route,title))
+        p.sort()
+        self.response.out.write(json.dumps(p))
 
 
 class Routes(webapp.RequestHandler):
@@ -256,7 +286,7 @@ class Routes(webapp.RequestHandler):
 
 class Buses(webapp.RequestHandler):
     cache = {}
-    
+
     def buses(self, route):
         try:
             timestamp, buses = self.cache[route]
@@ -328,7 +358,7 @@ class MainPage(webapp.RequestHandler):
                                "stops": stops,
                                "buses": buses,
                                "routes": routes}
-            
+
             path = os.path.join(os.path.dirname(__file__), 'index.html')
 
         self.response.out.write(template.render(path, template_values))
@@ -337,6 +367,7 @@ application = webapp.WSGIApplication([('/', MainPage),
                                       ('/Paths', Paths),
                                       ('/Buses', Buses),
                                       ('/Routes', Routes),
+                                      ('/Arrivals', Arrivals),
                                      ], debug=True)
 
 def main():
