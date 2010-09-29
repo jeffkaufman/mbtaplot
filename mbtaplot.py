@@ -21,6 +21,18 @@ def get_xml(use_url):
     usock.close()
     return xmldoc
 
+
+short_names = {"Line": "SLM",
+               "701": "CT1",
+               "747": "CT2S",
+               "748": "CT2N",
+               "708" : "CT3"
+               }
+
+def short_name(x):
+    x = str(x).split()[-1]
+    return short_names.get(x,x)
+
 class Bus(object):
     def __init__(self, xml_vehicle):
         for attribute in ("dirTag", "heading", "id", "lat", "lon", "routeTag", "secsSinceReport"):
@@ -269,9 +281,9 @@ class Arrivals(webapp.RequestHandler):
 
         p = []
         for predictions in xmldoc.getElementsByTagName("predictions"):
-            route = predictions.getAttribute("routeTitle")
+            route = short_name(predictions.getAttribute("routeTitle"))
             for direction in predictions.getElementsByTagName("direction"):
-                title = direction.getAttribute("title") 
+                title = direction.getAttribute("title")
                 for prediction in direction.getElementsByTagName("prediction"):
                     minutes = int(prediction.getAttribute("minutes"))
                     p.append((minutes,route,title))
@@ -313,13 +325,6 @@ class Buses(webapp.RequestHandler):
         self.response.out.write(json.dumps(
                 [bus.sendable() for bus in self.buses(route).values()]))
 
-short_names = {"Line": "SLM",
-               "701": "CT1",
-               "747": "CT2S",
-               "748": "CT2N",
-               "708" : "CT3"
-               }
-
 class MainPage(webapp.RequestHandler):
 
     def get(self):
@@ -345,11 +350,7 @@ class MainPage(webapp.RequestHandler):
         if not routes and not all_routes:
             path = os.path.join(os.path.dirname(__file__), 'chooser.html')
 
-            def clean_title(x):
-                t = x.split()[-1]
-                return short_names.get(t,t)
-
-            template_values = {"routes": [{"tag": tag, "title": clean_title(title)} for tag, title in allRoutes()]}
+            template_values = {"routes": [{"tag": tag, "title": short_name(title)} for tag, title in allRoutes()]}
         else:
             template_values = {"shading": shading,
                                "all_routes": all_routes,
