@@ -11,7 +11,6 @@ from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
 from xml.sax.saxutils import escape
 import simplejson as json
-from google.appengine.api.urlfetch import InvalidURLError
 
 BUS_FEED="http://webservices.nextbus.com/service/publicXMLFeed?"
 
@@ -85,15 +84,15 @@ def request_paths(route_num, path_cache={}):
 
         try:
             xmldoc = get_xml(use_url)
-        except InvalidURLError:
-            logging.debug('request_paths: failed url: %s' % use_url)
+        except Exception:
+            logging.warning('request_paths: failed url: %s' % use_url)
             return [], {}, {}
 
         stops = {}
 
         xml_routes = xmldoc.getElementsByTagName("route")
         if not xml_routes:
-            logging.debug('request_paths: system returned no route for %s\n' % route_num)
+            logging.warning('request_paths: system returned no route for %s\n' % route_num)
             return [], {}, {}
 
         for s in xml_routes[0].getElementsByTagName("stop"):
@@ -150,8 +149,8 @@ def request_predictions(route_num, bus_hash):
 
         try:
             xmldoc = get_xml(use_url)
-        except InvalidURLError:
-            logging.debug('request_predictions: failed url: %s' % use_url)
+        except Exception:
+            logging.warning('request_predictions: failed url: %s' % use_url)
             return
 
         updatePredictions(xmldoc)
@@ -182,8 +181,8 @@ def request_buses(route_num):
 
     try:
         xmldoc = get_xml(use_url)
-    except InvalidURLError:
-        logging.debug('request_buses: failed url: %s' % use_url)
+    except Exception:
+        logging.warning('request_buses: failed url: %s' % use_url)
         return bus_hash
 
 
@@ -206,8 +205,8 @@ def allRoutes():
 
     try:
         xmldoc = get_xml(use_url)
-    except InvalidURLError:
-        logging.debug('allRoutes: failed url: %s' % use_url)
+    except Exception:
+        logging.warning('allRoutes: failed url: %s' % use_url)
         return []
 
     return [[route.getAttribute("tag"), route.getAttribute("title")]
@@ -274,8 +273,8 @@ class Arrivals(webapp.RequestHandler):
                                        "stopId=%s" % stop))
         try:
             xmldoc = get_xml(use_url)
-        except InvalidURLError:
-            logging.debug('Arrivals: failed url: %s' % use_url)
+        except Exception:
+            logging.warning('Arrivals: failed url: %s' % use_url)
             self.response.out.write(json.dumps([]))
             return
 
