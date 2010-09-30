@@ -65,6 +65,7 @@ class Bus(object):
             "lat_j": self.lat,
             "lon_j": self.lon,
             "id": self.id,
+            "dir": self.dirTag,
             "age_i": int(self.predAge),
             "age_j": int(self.age),
             "rhead": self.round_heading,
@@ -190,13 +191,15 @@ def request_buses(route_num):
         bus = Bus(vehicle)
         bus_hash[bus.id] = bus
 
+    return bus_hash
+
+
+def update_predictions(route_num, bus_hash):
     for bus_id, prediction in request_predictions(route_num, bus_hash).items():
         minutes, stop_lat, stop_lon = prediction
         bus_hash[bus_id].pred_t = time.time()+minutes*60+30
         bus_hash[bus_id].pred_lat = stop_lat
         bus_hash[bus_id].pred_lon = stop_lon
-
-    return bus_hash
 
 
 def allRoutes():
@@ -222,6 +225,26 @@ class Point(object):
 class Path(object):
     def __init__(self, xml_path):
         self.points = [Point(p) for p in xml_path.getElementsByTagName("point")]
+        self.tags = [tag.getAttribute("id") for tag in xml_path.getElementsByTagName("tag")]
+
+    def is_for(self, direction):
+        """ is this path one of the ones for this direction? """
+        # The format for path tags appears to be that the path tag
+        # will start with the direction tag it belongs to:
+        #
+        #    dir = 78_780004v0_1
+        #   path = 78_780004v0_130_2156_2159, 78_780004v0_110_2330_2332, ...
+        #
+        #    dir = 77_770009v0_1
+        #   path = 77_770009v0_18_2303_2305, ...
+        #
+        # I can't find this documented anywhere, so it might change.
+        # If it does, we can just return "true", and the downside will
+        # be more network traffic and busses appearing on the wrong
+        # side of divided streets like mass av
+        #
+        return any(tag.startswith(direction) for tag in self.tags)
+
     def __getitem__(self, x):
         return self.points[x]
 
@@ -250,12 +273,21 @@ class Paths(webapp.RequestHandler):
         route = cgi.escape(self.request.get('route'))
         if route not in self.cache:
             paths, directions, stops = request_paths(route)
-            self.cache[route] = json.dumps({"paths" : [[{"lat": point.lat, "lon": point.lon}
-                                                        for point in path]
-                                                       for path in paths],
 
-                                            "stops" : [{"lat": stop.lat, "lon": stop.lon, "title" : stop.title, "tag": stop.tag}
-                                                       for stop in stops.values()]})
+            path_structure = [[{"lat": point.lat, "lon": point.lon} for point in path] for path in paths]
+
+            direction_structure = {}
+            for direction in directions:
+                direction_structure[direction] = [[{"lat": point.lat, "lon": point.lon} for point in path] 
+                                                  for path in paths
+                                                  if path.is_for(direction)]
+
+            stop_structure = [{"lat": stop.lat, "lon": stop.lon, "title" : stop.title, "tag": stop.tag}
+                              for stop in stops.values()]
+
+            self.cache[route] = json.dumps({"paths" : path_structure,
+                                            "directions": direction_structure,
+                                            "stops": stop_structure})
 
         self.response.out.write(self.cache[route])
 
@@ -297,6 +329,7 @@ class Routes(webapp.RequestHandler):
 
 class Buses(webapp.RequestHandler):
     cache = {}
+    max_refresh = 12
 
     def buses(self, route):
         try:
@@ -316,10 +349,12 @@ class Buses(webapp.RequestHandler):
         route = cgi.escape(self.request.get('route'))
 
         now = time.time()
-        if now - self.timestamp(route) > 12:
+        if now - self.timestamp(route) > self.max_refresh:
             """ refresh buses from server every Nsec """
 
-            self.cache[route] = now, request_buses(route)
+            buses = request_buses(route)
+            self.cache[route] = now, buses
+            update_predictions(route, buses)
 
         self.response.out.write(json.dumps(
                 [bus.sendable() for bus in self.buses(route).values()]))

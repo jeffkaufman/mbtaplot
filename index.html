@@ -31,7 +31,7 @@ html,body,all
 </script>
 <script type="text/javascript">
    var image_cache = new Object(); // heading -> marker
-   var path_cache = new Object();  // route -> path[]
+   var path_cache = new Object();  // route -> direction -> paths[points[]]
    var bus_cache = new Object();   // route -> bus[]
 
    var stop_image = new google.maps.MarkerImage(
@@ -96,15 +96,16 @@ html,body,all
    }
 
 
-   function snap_to_path(route, lat, lon) {
+   function snap_to_path(route, dir, lat, lon) {
      var best_line = null;
      var best_dist = null;
 
-     if (!(route in path_cache)) {
+     if (!(route in path_cache) || !(dir in path_cache[route])) {
         return [lat, lon];
      }
 
-     paths = path_cache[route];
+     // only consider paths for this route in this direction
+     var paths = path_cache[route][dir];
 
      for (path_no in paths) {
         for (point_no in paths[path_no]) {
@@ -180,7 +181,7 @@ html,body,all
        }
 
        if (document.settings.snap.checked) {
-          cpol = snap_to_path(route, lat, lon);
+          cpol = snap_to_path(route, bus.dir, lat, lon);
           lat = cpol[0];
           lon = cpol[1];
        }
@@ -273,7 +274,7 @@ html,body,all
       {% endif %}
 
          $.getJSON('/Paths?route=' + route, function(r) {
-            path_cache[route] = r.paths;
+            path_cache[route] = r.directions;
 
             for (path_no in r.paths) {
                var coords = new Array();
