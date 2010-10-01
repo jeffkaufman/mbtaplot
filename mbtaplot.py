@@ -285,7 +285,7 @@ class Paths(webapp.RequestHandler):
             stop_structure = [{"lat": stop.lat, "lon": stop.lon, "title" : stop.title, "tag": stop.tag}
                               for stop in stops.values()]
 
-            self.cache[route] = json.dumps({"paths" : path_structure,
+            self.cache[route] = json.dumps({#"paths" : path_structure,
                                             "directions": direction_structure,
                                             "stops": stop_structure})
 

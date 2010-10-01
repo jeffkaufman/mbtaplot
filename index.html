@@ -30,9 +30,58 @@ html,body,all
     src="http://maps.google.com/maps/api/js?sensor=false">
 </script>
 <script type="text/javascript">
+   var default_path_color = "#FF0000";
+   var active_path_color = "#0044FF";
+   var default_path_opacity = 0.5;
+   var active_path_opacity = 1.0;
+
+
+
    var image_cache = new Object(); // heading -> marker
    var path_cache = new Object();  // route -> direction -> paths[points[]]
+   var path_lines = new Object();  // route -> direction -> polylines[]
    var bus_cache = new Object();   // route -> bus[]
+
+   var current_colored_path = null;
+
+
+
+   function color_paths(route, direction) 
+   {
+      if (current_colored_path) 
+      {
+         color_path(current_colored_path[0], current_colored_path[1], default_path_color, default_path_opacity);
+      }
+      
+      color_path(route, direction, active_path_color, active_path_opacity);
+      current_colored_path = [route, direction];
+   }
+
+      
+
+
+   function color_path(route, direction, color, opacity) 
+   {
+      if (!(route in path_lines) || !(direction in path_lines[route])) 
+      {
+         return
+      }
+      var paths = path_lines[route][direction];
+      
+      for (path_no in paths) 
+      {
+         paths[path_no].setOptions({
+               "strokeColor" : color,
+               "strokeOpacity": opacity
+                  });
+      }
+   }
+      
+         
+                  
+               
+         
+      
 
    var stop_image = new google.maps.MarkerImage(
        "static/stop.png",
@@ -200,7 +249,7 @@ html,body,all
 
        for (bus_no in buses) {
           var bus = buses[bus_no];
-          var busid = route + ":" + bus.id;
+          var busid = route + ":" + bus.dir + ":"+ bus.id;
           var bus_title = busid + " -- age " + bus.age_j;
 
           var t_now = curtime();
@@ -214,7 +263,6 @@ html,body,all
              var delta_lon = lat_lon_1[1] - lat_lon[1];
              if (Math.abs(delta_lat) > 0.000001 && Math.abs(delta_lon) > 0.000001)
              {
-                //var theta_r = Math.atan2(-delta_lat,-delta_lon);
                 var theta_r = Math.atan2(delta_lon,delta_lat);
                 var theta_d = (180*theta_r/Math.PI+360)%360;
                 bus.rhead = Math.round(theta_d)%120;
@@ -223,18 +271,29 @@ html,body,all
 
           var blatlng = new google.maps.LatLng(lat_lon[0], lat_lon[1]);
 
+          function make_marker() 
+          {
+             var bmarker = new google.maps.Marker({
+                   position: blatlng,
+                   title:bus_title + " (new)"
+                   });
+             bmarker.setMap(map);
+             google.maps.event.addListener(bmarker, "click", function() {
+                color_paths(bmarker.bus_route, bmarker.bus_direction);
+             });
+             return bmarker;
+             
+          }
+
           if (!(busid in busarr)) {
-            var bmarker = new google.maps.Marker({
-              position: blatlng,
-              title:bus_title + " (new)"
-            });
-            busarr[busid] = bmarker;
-            bmarker.setMap(map);
+             busarr[busid] = make_marker();
           }
 
           busarr[busid].setIcon(load_image(bus.rhead));
           busarr[busid].setPosition(blatlng);
           busarr[busid].setTitle(bus_title);
+          busarr[busid].bus_route = route;
+          busarr[busid].bus_direction = bus.dir;
        }
     }
 
@@ -259,6 +318,34 @@ html,body,all
       );
     }
 
+    function draw_direction(route, direction, map, opacity, weight) 
+    {
+       var paths = path_cache[route][direction];
+               
+       for (path_no in paths) {
+          var coords = new Array();
+          for (point_no in paths[path_no]) {
+             var point = paths[path_no][point_no];
+             update_bounds(point.lat, point.lon)
+                coords.push( new google.maps.LatLng(point.lat, point.lon) );
+          }
+          
+          var buspath = new google.maps.Polyline({
+            path: coords,
+                strokeColor: default_path_color,
+                strokeOpacity: opacity,
+                strokeWeight: weight
+                });
+          
+          buspath.setMap(map);
+          google.maps.event.addListener(buspath, "click", function() {
+             //draw_buses(map, busarr, route);
+          });
+          
+          path_lines[route][direction].push(buspath);
+       }
+    }       
+
     function draw_routes(map, route, busarr) {
 
       {% if shading %}
@@ -269,35 +356,22 @@ html,body,all
          var weight = n_buses/8+1;
          //var weight = n_buses/4+1;
       {% else %}
-         var opacity = 1.0;
+         var opacity = default_path_opacity;
          var weight = 2.0;
       {% endif %}
 
          $.getJSON('/Paths?route=' + route, function(r) {
             path_cache[route] = r.directions;
+            path_lines[route] = new Object();
 
-            for (path_no in r.paths) {
-               var coords = new Array();
-               for (point_no in r.paths[path_no]) {
-                   var point = r.paths[path_no][point_no];
-                   update_bounds(point.lat, point.lon)
-                   coords.push( new google.maps.LatLng(point.lat, point.lon) );
-               }
-
-               var buspath = new google.maps.Polyline({
-                   path: coords,
-                   strokeColor: "#FF0000",
-                   strokeOpacity: opacity,
-                   strokeWeight: weight
-               });
-
-               buspath.setMap(map);
-               google.maps.event.addListener(buspath, "click", function() {
-                 draw_buses(map, busarr, route);
-               });
-
-               recenter();
+            for (direction in path_cache[route]) 
+            {
+               path_lines[route][direction] = new Array();
+               draw_direction(route, direction, map, opacity, weight);
             }
+
+            recenter();
+            
 
             {% if stops %}
               stop_info_window = new google.maps.InfoWindow({
