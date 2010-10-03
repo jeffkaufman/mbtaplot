@@ -31,6 +31,8 @@ def get_text(use_url):
     usock.close()
     return text
 
+def clean_substop(stop):
+    return stop[1:-1]
 
 short_names = {"Line": "SLM",
                "701": "CT1",
@@ -42,6 +44,29 @@ short_names = {"Line": "SLM",
 def short_name(x):
     x = str(x).split()[-1]
     return short_names.get(x,x)
+
+def get_substop_arrivals(stop):
+    route, stop_desc = get_substop_info(stop)
+    trips = []
+    for trip, stop_info in request_subways_literal(route).items():
+        stop_info.sort()
+        for wait, stopn, direction in stop_info:
+            if stopn == stop:
+                last_stop_wait, last_stop, last_stop_direction = stop_info[-1] 
+                _, stop_desc_target = get_substop_info(last_stop)
+                stop_desc_target = stop_desc_target.replace(" Station","") #+ " (%s)" % trip
+                if wait < 0:
+                    continue
+                trips.append((wait/60, route + " Line", stop_desc_target))
+    return trips
+
+def get_substop_info(stop):
+    spaths = request_subpaths()
+    for route, paths in spaths.items():
+        for stopn,stop_desc,lat,lon,branch in paths:
+            if stopn == stop:
+                return route, stop_desc
+    raise Exception("unknown stop %s" % stop)
 
 def subway_station_loc(route, stop):
     spaths = request_subpaths()
@@ -133,20 +158,11 @@ def request_subpaths(lines={}):
                 line, stop,_,_,_,_,_,branch,d,_,_,stop_desc,_,lat,lon = x.strip().split(',')
                 if line not in lines:
                     lines[line] = []
+                    
+                lat,lon=float(lat),float(lon)
 
-                stop_desc+=" " + d
+                lines[line].append((clean_substop(stop),stop_desc,lat,lon,branch))
 
-                lat, lon = float(lat), float(lon)
-                if stop[-1]=="N":
-                    lon+=0.0003
-                elif stop[-1]=="S":
-                    lon-=0.0003
-                elif stop[-1]=="E":
-                    lat-=0.0003
-                elif stop[-1]=="W":
-                    lat+=0.0003
-
-                lines[line].append((stop,stop_desc,lat,lon,branch))
             except ValueError:
                 continue
 
@@ -427,24 +443,28 @@ class Arrivals(object):
 class Arrivals(webapp.RequestHandler):
     def get(self):
         stop = cgi.escape(self.request.get('stop'))
-        use_url = BUS_FEED + "&".join(("command=predictions",
-                                       "a=mbta",
-                                       "stopId=%s" % stop))
-        try:
-            xmldoc = get_xml(use_url)
-        except Exception:
-            logging.warning('Arrivals: failed url: %s' % use_url)
-            self.response.out.write(json.dumps([]))
-            return
 
-        p = []
-        for predictions in xmldoc.getElementsByTagName("predictions"):
-            route = short_name(predictions.getAttribute("routeTitle"))
-            for direction in predictions.getElementsByTagName("direction"):
-                title = direction.getAttribute("title")
-                for prediction in direction.getElementsByTagName("prediction"):
-                    minutes = int(prediction.getAttribute("minutes"))
-                    p.append((minutes,route,title))
+        if stop.isalpha():
+            p = get_substop_arrivals(stop)
+        else:
+            use_url = BUS_FEED + "&".join(("command=predictions",
+                                           "a=mbta",
+                                           "stopId=%s" % stop))
+            try:
+                xmldoc = get_xml(use_url)
+            except Exception:
+                logging.warning('Arrivals: failed url: %s' % use_url)
+                self.response.out.write(json.dumps([]))
+                return
+
+            p = []
+            for predictions in xmldoc.getElementsByTagName("predictions"):
+                route = short_name(predictions.getAttribute("routeTitle"))
+                for direction in predictions.getElementsByTagName("direction"):
+                    title = direction.getAttribute("title")
+                    for prediction in direction.getElementsByTagName("prediction"):
+                        minutes = int(prediction.getAttribute("minutes"))
+                        p.append((minutes,route,title))
         p.sort()
         self.response.out.write(json.dumps(p))
 
@@ -474,6 +494,8 @@ def request_subways_literal(line):
             sys.stderr.write(x+"\n")
             continue
         
+        stop = clean_substop(stop)
+
         if rev != "Revenue":
             continue
 
