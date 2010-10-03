@@ -30,8 +30,6 @@ html,body,all
     src="http://maps.google.com/maps/api/js?sensor=false">
 </script>
 <script type="text/javascript">
-   var default_path_color = "#FF0000";
-   var active_path_color = "#0044FF";
    var default_path_opacity = 0.5;
    var active_path_opacity = 1.0;
 
@@ -44,16 +42,35 @@ html,body,all
 
    var current_colored_path = null;
 
+   function get_color(active, route) {
+      colors = {"Red": {true: "#CC0000",
+                        false: "#FF0000"},
+                "Orange": {true: "#FF7700",
+                           false: "#FF5500"},
+                "Blue": {true: "#0000CC",
+                         false: "#1900FF"},
+                "Else": {true: "#000000",
+                         false: "#888800"}}
+      if (route in colors) { return colors[route][active]; }
+      else { return colors["Else"][active]; }
+   }
+     
 
+   function is_subway(route) {
+     return route == "Red" || route == "Blue" || route == "Orange";
+   }
 
    function color_paths(route, direction) 
    {
       if (current_colored_path) 
       {
-         color_path(current_colored_path[0], current_colored_path[1], default_path_color, default_path_opacity);
+         color_path(current_colored_path[0],
+                    current_colored_path[1],
+                    get_color(false, current_colored_path[0]),
+                    default_path_opacity);
       }
-      
-      color_path(route, direction, active_path_color, active_path_opacity);
+
+      color_path(route, direction, get_color(true,route), active_path_opacity);
       current_colored_path = [route, direction];
    }
 
@@ -170,7 +187,7 @@ html,body,all
         }
      }
 
-     if (best_line == null || best_dist > .00001) {
+     if (best_line == null || (best_dist > .00001 && !is_subway(route))) {
         // if we failed to find a good line, or if we'd be adjusting too far, do nothing
         return [lat,lon];
      }
@@ -332,7 +349,7 @@ html,body,all
           
           var buspath = new google.maps.Polyline({
             path: coords,
-                strokeColor: default_path_color,
+                strokeColor: get_color(false,route),
                 strokeOpacity: opacity,
                 strokeWeight: weight
                 });
@@ -357,7 +374,7 @@ html,body,all
          //var weight = n_buses/4+1;
       {% else %}
          var opacity = default_path_opacity;
-         var weight = 2.0;
+         var weight = 3.0;
       {% endif %}
 
          $.getJSON('/Paths?route=' + route, function(r) {
@@ -444,7 +461,7 @@ html,body,all
       });
     {% else %}
        {% for route in routes %}
-          draw_routes(map, {{route}}, new Object());
+          draw_routes(map, "{{route}}", new Object());
        {% endfor %}
     {% endif %}
 

@@ -13,12 +13,23 @@ from xml.sax.saxutils import escape
 import simplejson as json
 
 BUS_FEED="http://webservices.nextbus.com/service/publicXMLFeed?"
+SUBWAY_FEED_DIR="http://developer.mbta.com/Data/"
+SUBWAY_KEY="http://developer.mbta.com/RT_Archive/RealTimeHeavyRailKeys.csv"
+
+def is_subway(route):
+    return route in('Red', 'Orange', 'Blue')
 
 def get_xml(use_url):
     usock = urllib2.urlopen(use_url)
     xmldoc = minidom.parse(usock)
     usock.close()
     return xmldoc
+
+def get_text(use_url):
+    usock = urllib2.urlopen(use_url)
+    text = usock.read()
+    usock.close()
+    return text
 
 
 short_names = {"Line": "SLM",
@@ -32,8 +43,24 @@ def short_name(x):
     x = str(x).split()[-1]
     return short_names.get(x,x)
 
+def subway_station_loc(route, stop):
+    spaths = request_subpaths()
+    try:
+        paths = spaths[route]
+    except ValueError:
+        raise Exception("%s not found" % route)
+
+    for stopn,stop_desc,lat,lon,branch in paths:
+        if stop == stopn:
+            return lat, lon
+
+    raise Exception("%s.%s not found" % (route, stop))
+
 class Bus(object):
     def __init__(self, xml_vehicle):
+        if not xml_vehicle:
+            return
+
         for attribute in ("dirTag", "heading", "id", "lat", "lon", "routeTag", "secsSinceReport"):
             setattr(self, attribute, xml_vehicle.getAttribute(attribute))
         self.t = time.time() - int(self.secsSinceReport)
@@ -45,6 +72,29 @@ class Bus(object):
         self.pred_t = self.t
         self.pred_lat = self.lat
         self.pred_lon = self.lon
+
+        self.type ="bus"
+
+
+    @staticmethod
+    def make_subway(trip, line,
+                    wait_i, stop_i, direction_i,
+                    wait_j, stop_j, direction_j):
+        s = Bus(None)
+        s.lat, s.lon = subway_station_loc(line, stop_i)
+        s.pred_lat, s.pred_lon = subway_station_loc(line, stop_j)
+        now = time.time()
+        s.t = now+wait_i
+        s.pred_t = now+wait_j
+        s.dirTag = direction_i
+        s.heading = 0
+        s.id = trip
+        s.routeTag = line
+
+        s.type = "subway"
+        
+        return s
+
 
     @property
     def age(self):
@@ -70,6 +120,40 @@ class Bus(object):
             "age_j": int(self.age),
             "rhead": self.round_heading,
             }
+
+
+def request_subpaths(lines={}):
+    """ like request_paths but for subways, all routes at once"""
+
+    if not lines:
+        for x in get_text(SUBWAY_KEY).split("\n"):
+            if x.startswith("Line,"):
+                continue
+            try:
+                line, stop,_,_,_,_,_,branch,d,_,_,stop_desc,_,lat,lon = x.strip().split(',')
+                if line not in lines:
+                    lines[line] = []
+
+                stop_desc+=" " + d
+
+                lat, lon = float(lat), float(lon)
+                if stop[-1]=="N":
+                    lon+=0.0003
+                elif stop[-1]=="S":
+                    lon-=0.0003
+                elif stop[-1]=="E":
+                    lat-=0.0003
+                elif stop[-1]=="W":
+                    lat+=0.0003
+
+                lines[line].append((stop,stop_desc,lat,lon,branch))
+            except ValueError:
+                continue
+
+    return lines
+
+
+
 
 
 def request_paths(route_num, path_cache={}):
@@ -211,9 +295,13 @@ def allRoutes():
     except Exception:
         logging.warning('allRoutes: failed url: %s' % use_url)
         return []
-
-    return [[route.getAttribute("tag"), route.getAttribute("title")]
-            for route in xmldoc.getElementsByTagName("route")]
+    
+    
+    allr = []
+    allr.extend([("Red", "Red"),("Orange","Orng"), ("Blue","Blue")])
+    allr.extend([[route.getAttribute("tag"), route.getAttribute("title")]
+                 for route in xmldoc.getElementsByTagName("route")])
+    return allr
 
 class Point(object):
     def __init__(self, xml_point):
@@ -269,25 +357,64 @@ class Direction(object):
 class Paths(webapp.RequestHandler):
     cache = {}
 
+
+    def for_bus(self,route):
+        paths, directions, stops = request_paths(route)
+
+        #path_structure = [[{"lat": point.lat, "lon": point.lon} for point in path] for path in paths]
+
+        direction_structure = {}
+        for direction in directions:
+            direction_structure[direction] = [[{"lat": point.lat, "lon": point.lon} for point in path]
+                                              for path in paths
+                                              if path.is_for(direction)]
+            
+        stop_structure = [{"lat": stop.lat, "lon": stop.lon, "title" : stop.title, "tag": stop.tag}
+                          for stop in stops.values()]
+
+        self.cache[route] = json.dumps({
+                "directions": direction_structure,
+                "stops": stop_structure})
+
+
+    def for_subway(self,route):
+        spaths = request_subpaths()
+        paths = spaths[route]
+
+        def branch_in_route(branch, direction):
+            if direction == -1:
+                return True
+
+            if branch == "Ashmont":
+                return direction == 1
+            elif branch == "Braintree":
+                return direction == 0
+            return True
+
+        directions = [-1,0]
+        if route == "Red":
+            directions.append(1)
+
+        direction_structure = {}
+        for direction in directions:
+            direction_structure[direction] = [[{"lat": lat, "lon": lon, "title": stop_desc, "tag": stop}
+                                               for stop,stop_desc,lat,lon,branch in paths
+                                               if branch_in_route(branch, direction)]]
+
+        stop_structure = direction_structure[-1][-0]
+        del direction_structure[-1]
+
+        self.cache[route] = json.dumps({
+                "directions": direction_structure,
+                "stops": stop_structure})
+
     def get(self):
         route = cgi.escape(self.request.get('route'))
         if route not in self.cache:
-            paths, directions, stops = request_paths(route)
-
-            path_structure = [[{"lat": point.lat, "lon": point.lon} for point in path] for path in paths]
-
-            direction_structure = {}
-            for direction in directions:
-                direction_structure[direction] = [[{"lat": point.lat, "lon": point.lon} for point in path] 
-                                                  for path in paths
-                                                  if path.is_for(direction)]
-
-            stop_structure = [{"lat": stop.lat, "lon": stop.lon, "title" : stop.title, "tag": stop.tag}
-                              for stop in stops.values()]
-
-            self.cache[route] = json.dumps({#"paths" : path_structure,
-                                            "directions": direction_structure,
-                                            "stops": stop_structure})
+            if is_subway(route):
+                self.for_subway(route)
+            else:
+                self.for_bus(route)
 
         self.response.out.write(self.cache[route])
 
@@ -326,6 +453,72 @@ class Routes(webapp.RequestHandler):
     def get(self):
         self.response.out.write(json.dumps(allRoutes()))
 
+def request_subways_literal(line):
+    os.environ['TZ'] = 'US/Eastern'
+    time.tzset()
+
+
+    use_url = SUBWAY_FEED_DIR + line + ".txt"
+
+    try:
+        text = text = get_text(use_url)
+    except Exception:
+        logging.warning('request_subways: failed url: %s' % use_url)
+        return {}
+
+    trips = {}
+    for x in text.split("\n"):
+        try:
+            _, n, stop, source, date, t, ampm, wait, rev, direction = x.replace(",","").split()
+        except ValueError:
+            sys.stderr.write(x+"\n")
+            continue
+        
+        if rev != "Revenue":
+            continue
+
+        def to_sec(t,ampm):
+            t_hr, t_min, t_sec = t.split(':')
+            if ampm=="PM":
+                t_hr = int(t_hr)+12
+            t = int(t_hr)*60*60+int(t_min)*60+int(t_sec)
+            return t
+        
+
+        t_then = to_sec(t,ampm)
+        t_now = to_sec(time.strftime("%H:%M:%S",time.localtime()),"AM") 
+        
+        if n not in trips:
+            trips[n] = []
+
+        wait = t_then - t_now
+
+        trips[n].append((wait, stop, direction))
+
+    for trip, stop_info in trips.items():
+        stop_info.sort()
+
+    return trips
+
+def request_subways(route):
+    subways = {}
+    for trip, stop_info in request_subways_literal(route).items():
+        if not stop_info:
+            continue
+        
+        wait_j,stop_j,direction_j = stop_info[0]
+
+        if len(stop_info) > 1:
+            wait_i,stop_i,direction_i = stop_info[1]
+        else:
+            wait_i,stop_i,direction_i = stop_info[0]
+
+        subways[trip] = Bus.make_subway(trip, route,
+                                        wait_i, stop_i, direction_i,
+                                        wait_j, stop_j, direction_j)
+
+    return subways
+
 
 class Buses(webapp.RequestHandler):
     cache = {}
@@ -352,9 +545,13 @@ class Buses(webapp.RequestHandler):
         if now - self.timestamp(route) > self.max_refresh:
             """ refresh buses from server every Nsec """
 
-            buses = request_buses(route)
-            self.cache[route] = now, buses
-            update_predictions(route, buses)
+            if is_subway(route):
+                subways =request_subways(route)
+                self.cache[route] = now, subways
+            else:
+                buses = request_buses(route)
+                self.cache[route] = now, buses
+                update_predictions(route, buses)
 
         self.response.out.write(json.dumps(
                 [bus.sendable() for bus in self.buses(route).values()]))
