@@ -449,11 +449,6 @@ class Paths(webapp.RequestHandler):
 
         self.response.out.write(self.cache[route])
 
-class Arrivals(object):
-    def __init__(route, title, direction):
-        self.route = route
-        self.title = title
-
 
 class Arrivals(webapp.RequestHandler):
     def get(self):
@@ -469,7 +464,7 @@ class Arrivals(webapp.RequestHandler):
                 xmldoc = get_xml(use_url)
             except Exception:
                 logging.warning('Arrivals: failed url: %s' % use_url)
-                self.response.out.write(json.dumps([]))
+                self.response.out.write(json.dumps(["error", []]))
                 return
 
             p = []
@@ -480,8 +475,9 @@ class Arrivals(webapp.RequestHandler):
                     for prediction in direction.getElementsByTagName("prediction"):
                         minutes = int(prediction.getAttribute("minutes"))
                         p.append((minutes,route,title))
+                        
         p.sort()
-        self.response.out.write(json.dumps(p))
+        self.response.out.write(json.dumps(["none" if not p else "ok", p]))
 
 
 class Routes(webapp.RequestHandler):

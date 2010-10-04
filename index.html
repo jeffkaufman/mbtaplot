@@ -411,24 +411,33 @@ html,body,all
                     t = "<h3>" + stop.title + "</h3>";
                     stop_info_window.setContent(t + "<tt>[loading ...]</tt>");
 
-                    $.getJSON('/Arrivals?stop=' + stop.tag, function(arrivals) 
+                    $.getJSON('/Arrivals?stop=' + stop.tag, function(arrival_info) 
                     {
-                       t += "<table border=\"0\">";
-                       for (arrival_no in arrivals) 
-                       {
-                          var minutes = arrivals[arrival_no][0];
-                          var route = arrivals[arrival_no][1];
-                          var title = arrivals[arrival_no][2];
+                       var arrival_status = arrival_info[0];
+                       var arrivals = arrival_info[1];
 
-                          if (minutes == "0") { minutes = "nowish"; }
-                          else { minutes += "min" ; }
-
-                          t += "<tr><td align=\"right\">" + minutes + ":</td><td>" + route + " " + title + "</td></tr>";
+                       if (arrival_status == "error") {
+                           t += "Predictions unavailable"
                        }
+                       else if (arrival_status == "none") {
+                           t += "No predicted stops"
+                       }
+                       else {
+                           t += "<table border=\"0\">";
+                           for (arrival_no in arrivals) 
+                           {
+                              var minutes = arrivals[arrival_no][0];
+                              var route = arrivals[arrival_no][1];
+                               var title = arrivals[arrival_no][2];
 
+                              if (minutes == "0") { minutes = "nowish"; }
+                              else { minutes += "min" ; }
+
+                              t += "<tr><td align=\"right\">" + minutes + ":</td><td>" + route + " " + title + "</td></tr>";
+                           }
+                           t += "</table>";
+                       }                       
                        
-                       
-                       t += "</table>";
                        stop_info_window.setContent(t);
                     });
                        
