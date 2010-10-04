@@ -46,18 +46,18 @@ def short_name(x):
     x = str(x).split()[-1]
     return short_names.get(x,x)
     
-def uncanonical_stops(stop_canonical):
-    spaths = request_subpaths()
-    return [stop
-            for route in spaths
-            for stop,stop_desc,canonical_stop,lat,lon,branch in spaths[route]
-            if canonical_stop == stop_canonical]
+def uncanonical_stops(canonical_stop):
+    subpaths = request_subpaths()
+    return [substop.stop
+            for route in subpaths
+            for substop in subpaths[route]
+            if canonical_stop == substop.canonical_stop]
 
 def get_substop_arrivals(stop):
-    _, stop_desc, canonical_stop = get_substop_info(stop)
+    substop = get_substop_info(stop)
     trips = []
     
-    ustops = uncanonical_stops(canonical_stop)
+    ustops = uncanonical_stops(substop.canonical_stop)
 
     for route in request_subpaths():
         for trip, stop_info in request_subways_literal(route).items():
@@ -65,7 +65,8 @@ def get_substop_arrivals(stop):
             for wait, stopn, direction in stop_info:
                 if stopn in ustops:
                     last_stop_wait, last_stop, last_stop_direction = stop_info[-1] 
-                    _, stop_desc_target, _ = get_substop_info(last_stop)
+                    substop_target = get_substop_info(last_stop)
+                    stop_desc_target = substop_target.stop_desc
                     stop_desc_target = stop_desc_target.replace(" Station","") 
                     if wait < 0:
                         continue
@@ -73,23 +74,23 @@ def get_substop_arrivals(stop):
     return trips
 
 def get_substop_info(stop):
-    spaths = request_subpaths()
-    for route, paths in spaths.items():
-        for stopn,stop_desc,canonical_stop,lat,lon,branch in paths:
-            if stopn == stop:
-                return route, stop_desc, canonical_stop
+    subpaths = request_subpaths()
+    for route, substops in subpaths.items():
+        for substop in substops:
+            if substop.stop == stop:
+                return substop
     raise Exception("unknown stop %s" % stop)
 
 def subway_station_loc(route, stop):
-    spaths = request_subpaths()
+    subpaths = request_subpaths()
     try:
-        paths = spaths[route]
+        substops = subpaths[route]
     except ValueError:
         raise Exception("%s not found" % route)
 
-    for stopn,stop_desc,canonical_stop,lat,lon,branch in paths:
-        if stop == stopn:
-            return lat, lon
+    for substop in substops:
+        if substop.stop == stop:
+            return substop.lat, substop.lon
 
     raise Exception("%s.%s not found" % (route, stop))
 
@@ -159,26 +160,29 @@ class Bus(object):
             }
 
 
-def request_subpaths(lines={}):
+class SubStop(object):
+    def __init__(self, strstop):
+        self.route, self.stop,_,self.canonical_stop,_,_,_,self.branch,_,_,_,self.stop_desc,_,self.lat,self.lon = strstop.strip().split(',')
+        self.lat, self.lon = float(self.lat), float(self.lon)
+
+def request_subpaths(routes={}):
     """ like request_paths but for subways, all routes at once"""
 
-    if not lines:
+    if not routes:
         for x in get_text(SUBWAY_KEY).split("\n"):
             if x.startswith("Line,"):
                 continue
             try:
-                line, stop,_,canonical_stop,_,_,_,branch,d,_,_,stop_desc,_,lat,lon = x.strip().split(',')
-                if line not in lines:
-                    lines[line] = []
-                    
-                lat,lon=float(lat),float(lon)
-
-                lines[line].append((stop,stop_desc,canonical_stop,lat,lon,branch))
-
+                substop = SubStop(x)
             except ValueError:
-                continue
+                continue                
 
-    return lines
+            if substop.route not in routes:
+                routes[substop.route] = []
+
+            routes[substop.route].append(substop)
+
+    return routes
 
 
 
@@ -406,8 +410,7 @@ class Paths(webapp.RequestHandler):
 
 
     def for_subway(self,route):
-        spaths = request_subpaths()
-        paths = spaths[route]
+        substops = request_subpaths()[route]
 
         def branch_in_route(branch, direction):
             if direction == -1:
@@ -425,9 +428,9 @@ class Paths(webapp.RequestHandler):
 
         direction_structure = {}
         for direction in directions:
-            direction_structure[direction] = [[{"lat": lat, "lon": lon, "title": stop_desc, "tag": stop}
-                                               for stop,stop_desc,canonical_stop,lat,lon,branch in paths
-                                               if branch_in_route(branch, direction)]]
+            direction_structure[direction] = [[{"lat": substop.lat, "lon": substop.lon, "title": substop.stop_desc, "tag": substop.stop}
+                                               for substop in substops
+                                               if branch_in_route(substop.branch, direction)]]
 
         stop_structure = direction_structure[-1][-0]
         del direction_structure[-1]
