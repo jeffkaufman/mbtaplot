@@ -31,8 +31,7 @@ def get_text(use_url):
     usock.close()
     return text
 
-def clean_substop(stop):
-    return stop[1:-1]
+
 
 short_names = {"Line": "SLM",
                "701": "CT1",
@@ -44,28 +43,39 @@ short_names = {"Line": "SLM",
 def short_name(x):
     x = str(x).split()[-1]
     return short_names.get(x,x)
+    
+def uncanonical_stops(stop_canonical):
+    spaths = request_subpaths()
+    return [stop
+            for route in spaths
+            for stop,stop_desc,canonical_stop,lat,lon,branch in spaths[route]
+            if canonical_stop == stop_canonical]
 
 def get_substop_arrivals(stop):
-    route, stop_desc = get_substop_info(stop)
+    _, stop_desc, canonical_stop = get_substop_info(stop)
     trips = []
-    for trip, stop_info in request_subways_literal(route).items():
-        stop_info.sort()
-        for wait, stopn, direction in stop_info:
-            if stopn == stop:
-                last_stop_wait, last_stop, last_stop_direction = stop_info[-1] 
-                _, stop_desc_target = get_substop_info(last_stop)
-                stop_desc_target = stop_desc_target.replace(" Station","") #+ " (%s)" % trip
-                if wait < 0:
-                    continue
-                trips.append((wait/60, route + " Line", stop_desc_target))
+    
+    ustops = uncanonical_stops(canonical_stop)
+
+    for route in request_subpaths():
+        for trip, stop_info in request_subways_literal(route).items():
+            stop_info.sort()
+            for wait, stopn, direction in stop_info:
+                if stopn in ustops:
+                    last_stop_wait, last_stop, last_stop_direction = stop_info[-1] 
+                    _, stop_desc_target, _ = get_substop_info(last_stop)
+                    stop_desc_target = stop_desc_target.replace(" Station","") 
+                    if wait < 0:
+                        continue
+                    trips.append((wait/60, route + " Line", stop_desc_target))
     return trips
 
 def get_substop_info(stop):
     spaths = request_subpaths()
     for route, paths in spaths.items():
-        for stopn,stop_desc,lat,lon,branch in paths:
+        for stopn,stop_desc,canonical_stop,lat,lon,branch in paths:
             if stopn == stop:
-                return route, stop_desc
+                return route, stop_desc, canonical_stop
     raise Exception("unknown stop %s" % stop)
 
 def subway_station_loc(route, stop):
@@ -75,7 +85,7 @@ def subway_station_loc(route, stop):
     except ValueError:
         raise Exception("%s not found" % route)
 
-    for stopn,stop_desc,lat,lon,branch in paths:
+    for stopn,stop_desc,canonical_stop,lat,lon,branch in paths:
         if stop == stopn:
             return lat, lon
 
@@ -155,13 +165,13 @@ def request_subpaths(lines={}):
             if x.startswith("Line,"):
                 continue
             try:
-                line, stop,_,_,_,_,_,branch,d,_,_,stop_desc,_,lat,lon = x.strip().split(',')
+                line, stop,_,canonical_stop,_,_,_,branch,d,_,_,stop_desc,_,lat,lon = x.strip().split(',')
                 if line not in lines:
                     lines[line] = []
                     
                 lat,lon=float(lat),float(lon)
 
-                lines[line].append((clean_substop(stop),stop_desc,lat,lon,branch))
+                lines[line].append((stop,stop_desc,canonical_stop,lat,lon,branch))
 
             except ValueError:
                 continue
@@ -414,7 +424,7 @@ class Paths(webapp.RequestHandler):
         direction_structure = {}
         for direction in directions:
             direction_structure[direction] = [[{"lat": lat, "lon": lon, "title": stop_desc, "tag": stop}
-                                               for stop,stop_desc,lat,lon,branch in paths
+                                               for stop,stop_desc,canonical_stop,lat,lon,branch in paths
                                                if branch_in_route(branch, direction)]]
 
         stop_structure = direction_structure[-1][-0]
@@ -494,8 +504,6 @@ def request_subways_literal(line):
             sys.stderr.write(x+"\n")
             continue
         
-        stop = clean_substop(stop)
-
         if rev != "Revenue":
             continue
 
