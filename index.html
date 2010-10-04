@@ -282,7 +282,12 @@ html,body,all
              {
                 var theta_r = Math.atan2(delta_lon,delta_lat);
                 var theta_d = (180*theta_r/Math.PI+360)%360;
-                bus.rhead = Math.round(theta_d)%120;
+
+                // round to the nearest 3 degrees in the range 0-120
+                bus.rhead = Math.round((Math.round(theta_d)%120)/3)*3;
+             }
+             else {
+                bus.rhead = 0;
              }
           }
 
