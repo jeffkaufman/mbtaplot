@@ -43,14 +43,14 @@ html,body,all
    var current_colored_path = null;
 
    function get_color(active, route) {
-      colors = {"Red": {true: "#CC0000",
-                        false: "#FF0000"},
-                "Orange": {true: "#FF7700",
-                           false: "#FF5500"},
-                "Blue": {true: "#0000CC",
-                         false: "#1900FF"},
-                "Bus": {true: "#B404AE",
-                        false: "#FE2EF7"}}
+      colors = {"Red": {"active": "#CC0000",
+                        "inactive": "#FF0000"},
+                "Orange": {"active": "#FF7700",
+                           "inactive": "#FF5500"},
+                "Blue": {"active": "#0000CC",
+                         "inactive": "#1900FF"},
+                "Bus": {"active": "#B404AE",
+                        "inactive": "#FE2EF7"}}
       if (route in colors) { return colors[route][active]; }
       else { return colors["Bus"][active]; }
    }
@@ -66,11 +66,11 @@ html,body,all
       {
          color_path(current_colored_path[0],
                     current_colored_path[1],
-                    get_color(false, current_colored_path[0]),
+                    get_color("inactive", current_colored_path[0]),
                     default_path_opacity);
       }
 
-      color_path(route, direction, get_color(true,route), active_path_opacity);
+      color_path(route, direction, get_color("active",route), active_path_opacity);
       current_colored_path = [route, direction];
    }
 
@@ -354,7 +354,7 @@ html,body,all
           
           var buspath = new google.maps.Polyline({
             path: coords,
-                strokeColor: get_color(false,route),
+                strokeColor: get_color("inactive",route),
                 strokeOpacity: opacity,
                 strokeWeight: weight
                 });
