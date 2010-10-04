@@ -3,3 +3,5 @@ speed up refresh code
 refactor
 better chooser
 error handling
+click prediction show route
+click bus show predictions

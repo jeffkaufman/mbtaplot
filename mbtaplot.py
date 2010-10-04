@@ -11,6 +11,8 @@ from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
 from xml.sax.saxutils import escape
 import simplejson as json
+import dateutil.tz
+import datetime
 
 BUS_FEED="http://webservices.nextbus.com/service/publicXMLFeed?"
 SUBWAY_FEED_DIR="http://developer.mbta.com/Data/"
@@ -484,8 +486,7 @@ class Routes(webapp.RequestHandler):
         self.response.out.write(json.dumps(allRoutes()))
 
 def request_subways_literal(line):
-    os.environ['TZ'] = 'US/Eastern'
-    time.tzset()
+    tz_boston = dateutil.tz.tzstr('EST5EDT')
 
 
     use_url = SUBWAY_FEED_DIR + line + ".txt"
@@ -516,7 +517,7 @@ def request_subways_literal(line):
         
 
         t_then = to_sec(t,ampm)
-        t_now = to_sec(time.strftime("%H:%M:%S",time.localtime()),"AM") 
+        t_now = to_sec(datetime.datetime.now(tz_boston).strftime("%H:%M:%S"),"AM") 
         
         if n not in trips:
             trips[n] = []
