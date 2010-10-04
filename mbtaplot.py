@@ -33,7 +33,9 @@ def get_text(use_url,refresh,cache={}):
     
     if use_url not in cache or time.time()-cache[use_url][0] > refresh:
         logging.info("fetch %s" % use_url)
-        result = urlfetch.fetch(url=use_url)
+        result = urlfetch.fetch(url=use_url,
+                                headers={"Cache-Control": "no-cache,max-age=0",
+                                         "Pragma": "no-cache"})
         if result.status_code == 200:
             new_text = result.content
             cache[use_url] = (time.time(), new_text)
