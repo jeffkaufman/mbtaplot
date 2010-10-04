@@ -1,0 +1,5 @@
+merge bus and subways stops for route predictions
+speed up refresh code
+refactor
+better chooser
+error handling
