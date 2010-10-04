@@ -1,7 +1,6 @@
 from __future__ import with_statement
 import sys
 import os
-import urllib2
 import time
 import cgi
 import logging
@@ -13,6 +12,7 @@ from xml.sax.saxutils import escape
 import simplejson as json
 import dateutil.tz
 import datetime
+from google.appengine.api import urlfetch
 
 BUS_FEED="http://webservices.nextbus.com/service/publicXMLFeed?"
 SUBWAY_FEED_DIR="http://developer.mbta.com/Data/"
@@ -21,26 +21,33 @@ SUBWAY_KEY="http://developer.mbta.com/RT_Archive/RealTimeHeavyRailKeys.csv"
 def is_subway(route):
     return route in('Red', 'Orange', 'Blue')
 
-def get_xml(use_url, caching=None, cache={}):
-    """ if you set caching to a refresh time, then only update every so often """
+def get_xml(use_url, refresh=10):
+    """ only update every /refresh/ seconds """
 
-    if use_url not in cache or not caching or time.time()-cache[use_url][0] > caching:
-        logging.info("fetch %s" % use_url)
-        usock = urllib2.urlopen(use_url)
-        cache[use_url] = (time.time(), minidom.parse(usock))
-        usock.close()
-    return cache[use_url][1]
+    return minidom.parse(get_text(use_url,refresh=refresh))
 
-def get_text(use_url,refresh=75,cache={}):
+class FailedFetchException(Exception):
+    pass
+
+def get_text(use_url,refresh,cache={}):
     
     if use_url not in cache or time.time()-cache[use_url][0] > refresh:
         logging.info("fetch %s" % use_url)
-        usock = urllib2.urlopen(use_url)
-        cache[use_url] = (time.time(), usock.read())
-        usock.close()
+        result = urlfetch.fetch(url=use_url)
+        if result.status_code == 200:
+            new_text = result.content
+            cache[use_url] = (time.time(), new_text)
+        else:
+            logging.warning("fetch failed status=%s %s" % (result.status_code,use_url))
 
-    return cache[use_url][1]
+    if use_url in cache:
+        return cache[use_url][1]
+    else:
+        raise FailedFetchException("Failed to Fetch %s and didn't have it cached" % use_url)
 
+class DebugText(webapp.RequestHandler):
+    def get(self):
+        self.response.out.write(get_text('http://developer.mbta.com/Data/Red.txt',refresh=2).replace("\n","<br>"))
 
 short_names = {"Line": "SLM",
                "701": "CT1",
@@ -208,7 +215,7 @@ def request_paths(route_num, path_cache={}):
 
         try:
             xmldoc = get_xml(use_url)
-        except Exception:
+        except FailedFetchException:
             logging.warning('request_paths: failed url: %s' % use_url)
             return [], {}, {}
 
@@ -272,8 +279,8 @@ def request_predictions(route_num, bus_hash):
             use_url += "&stops=%s|%s" % (route_num, stop.tag)
 
         try:
-            xmldoc = get_xml(use_url, caching=60)
-        except Exception:
+            xmldoc = get_xml(use_url, refresh=60)
+        except FailedFetchException:
             logging.warning('request_predictions: failed url: %s' % use_url)
             return
 
@@ -305,7 +312,7 @@ def request_buses(route_num):
 
     try:
         xmldoc = get_xml(use_url)
-    except Exception:
+    except FailedFetchException:
         logging.warning('request_buses: failed url: %s' % use_url)
         return bus_hash
 
@@ -331,7 +338,7 @@ def allRoutes():
 
     try:
         xmldoc = get_xml(use_url)
-    except Exception:
+    except FailedFetchException:
         logging.warning('allRoutes: failed url: %s' % use_url)
         return []
     
@@ -469,7 +476,7 @@ class Arrivals(webapp.RequestHandler):
                                            "stopId=%s" % stop))
             try:
                 xmldoc = get_xml(use_url)
-            except Exception:
+            except FailedFetchException:
                 logging.warning('Arrivals: failed url: %s' % use_url)
                 self.response.out.write(json.dumps(["error", []]))
                 return
@@ -497,8 +504,8 @@ def request_subways_literal(line):
     use_url = SUBWAY_FEED_DIR + line + ".txt"
 
     try:
-        text = text = get_text(use_url)
-    except Exception:
+        text = get_text(use_url,refresh=75)
+    except FailedFetchException:
         logging.warning('request_subways: failed url: %s' % use_url)
         return {}
 
@@ -644,6 +651,7 @@ application = webapp.WSGIApplication([('/', MainPage),
                                       ('/Buses', Buses),
                                       ('/Routes', Routes),
                                       ('/Arrivals', Arrivals),
+                                      ('/DebugText', DebugText),
                                      ], debug=True)
 
 def main():
