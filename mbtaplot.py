@@ -27,12 +27,14 @@ def get_xml(use_url):
     usock.close()
     return xmldoc
 
-def get_text(use_url):
-    usock = urllib2.urlopen(use_url)
-    text = usock.read()
-    usock.close()
-    return text
+def get_text(use_url,refresh=15,cache={}):
+    
+    if use_url not in cache or time.time()-cache[use_url][0] > refresh:
+        usock = urllib2.urlopen(use_url)
+        cache[use_url] = (time.time(), usock.read())
+        usock.close()
 
+    return cache[use_url][1]
 
 
 short_names = {"Line": "SLM",
@@ -169,7 +171,7 @@ def request_subpaths(routes={}):
     """ like request_paths but for subways, all routes at once"""
 
     if not routes:
-        for x in get_text(SUBWAY_KEY).split("\n"):
+        for x in get_text(SUBWAY_KEY,refresh=60*60*12).split("\n"):
             if x.startswith("Line,"):
                 continue
             try:
@@ -487,7 +489,6 @@ class Routes(webapp.RequestHandler):
 def request_subways_literal(line):
     tz_boston = dateutil.tz.tzstr('EST5EDT')
 
-
     use_url = SUBWAY_FEED_DIR + line + ".txt"
 
     try:
@@ -509,24 +510,32 @@ def request_subways_literal(line):
 
         def to_sec(t,ampm):
             t_hr, t_min, t_sec = t.split(':')
-            if ampm=="PM":
+            if t_hr == "12":
+                if ampm == "AM":
+                    t_hr = "0"
+            elif ampm=="PM":
                 t_hr = int(t_hr)+12
             t = int(t_hr)*60*60+int(t_min)*60+int(t_sec)
             return t
         
-
         t_then = to_sec(t,ampm)
-        t_now = to_sec(datetime.datetime.now(tz_boston).strftime("%H:%M:%S"),"AM") 
-        
+        now_local = datetime.datetime.now(tz_boston).strftime("%H:%M:%S")
+        t_now = to_sec(now_local, "AM")
+
         if n not in trips:
             trips[n] = []
 
         wait = t_then - t_now
 
+        #logging.info("t_then: %s; t_now: %s; t: %s; wait: %s, now_local: %s" % (t_then, t_now, t, wait, now_local))
+
         trips[n].append((wait, stop, direction))
 
     for trip, stop_info in trips.items():
         stop_info.sort()
+
+        while len(stop_info) > 2 and stop_info[1][0] < 0:
+            del stop_info[0] # only have one negative wait at a time
 
     return trips
 
@@ -572,8 +581,8 @@ class Buses(webapp.RequestHandler):
         route = cgi.escape(self.request.get('route'))
 
         now = time.time()
-        if now - self.timestamp(route) > self.max_refresh:
-            """ refresh buses from server every Nsec """
+        if now - self.timestamp(route) > self.max_refresh or is_subway(route):
+            """ refresh buses from server every Nsec; subway caching is done in get_text """
 
             if is_subway(route):
                 subways =request_subways(route)
