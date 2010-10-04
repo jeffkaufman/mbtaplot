@@ -24,7 +24,7 @@ def is_subway(route):
 def get_xml(use_url, refresh=10):
     """ only update every /refresh/ seconds """
 
-    return minidom.parse(get_text(use_url,refresh=refresh))
+    return minidom.parseString(get_text(use_url,refresh=refresh))
 
 class FailedFetchException(Exception):
     pass
