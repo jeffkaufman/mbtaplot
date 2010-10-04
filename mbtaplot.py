@@ -21,15 +21,20 @@ SUBWAY_KEY="http://developer.mbta.com/RT_Archive/RealTimeHeavyRailKeys.csv"
 def is_subway(route):
     return route in('Red', 'Orange', 'Blue')
 
-def get_xml(use_url):
-    usock = urllib2.urlopen(use_url)
-    xmldoc = minidom.parse(usock)
-    usock.close()
-    return xmldoc
+def get_xml(use_url, caching=None, cache={}):
+    """ if you set caching to a refresh time, then only update every so often """
 
-def get_text(use_url,refresh=15,cache={}):
+    if use_url not in cache or not caching or time.time()-cache[use_url][0] > caching:
+        logging.info("fetch %s" % use_url)
+        usock = urllib2.urlopen(use_url)
+        cache[use_url] = (time.time(), minidom.parse(usock))
+        usock.close()
+    return cache[use_url][1]
+
+def get_text(use_url,refresh=75,cache={}):
     
     if use_url not in cache or time.time()-cache[use_url][0] > refresh:
+        logging.info("fetch %s" % use_url)
         usock = urllib2.urlopen(use_url)
         cache[use_url] = (time.time(), usock.read())
         usock.close()
@@ -267,7 +272,7 @@ def request_predictions(route_num, bus_hash):
             use_url += "&stops=%s|%s" % (route_num, stop.tag)
 
         try:
-            xmldoc = get_xml(use_url)
+            xmldoc = get_xml(use_url, caching=60)
         except Exception:
             logging.warning('request_predictions: failed url: %s' % use_url)
             return
