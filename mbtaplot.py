@@ -13,6 +13,7 @@ import simplejson as json
 import dateutil.tz
 import datetime
 from google.appengine.api import urlfetch
+from google.appengine.api import memcache
 
 BUS_FEED="http://webservices.nextbus.com/service/publicXMLFeed?"
 SUBWAY_FEED_DIR="http://developer.mbta.com/Data/"
@@ -29,23 +30,32 @@ def get_xml(use_url, refresh=10):
 class FailedFetchException(Exception):
     pass
 
-def get_text(use_url,refresh,isxml=False,cache={}):
+def get_text(use_url,refresh,isxml=False,cache=memcache.Client()):
+    cached_val = cache.get(use_url)
+    if cached_val:
+        result_age, result_val = cached_val
+    else:
+        result_age, result_val = 1000, None
 
-    if use_url not in cache or time.time()-cache[use_url][0] > refresh:
+    if not result_val or time.time()-result_age > refresh:
         logging.info("fetch %s" % use_url)
         result = urlfetch.fetch(url=use_url,
                                 headers={"Cache-Control": "no-cache,max-age=0",
                                          "Pragma": "no-cache"})
         if result.status_code == 200:
-            new_text = result.content
-            if isxml:
-                new_text = minidom.parseString(new_text)
-            cache[use_url] = (time.time(), new_text)
-        else:
-            logging.warning("fetch failed status=%s %s" % (result.status_code,use_url))
+            result_val = result.content
+            result_age = time.time()
+            cached_val = result_age, result_val
 
-    if use_url in cache:
-        return cache[use_url][1], time.time()-cache[use_url][0]
+            cache.set(use_url, cached_val, time=refresh)
+        else:
+            logging.warning("fetch failed status=%s %s" % (result.status_code, use_url))
+
+    if result_val:
+        if isxml:
+            result_val = minidom.parseString(result_val)
+
+        return result_val, time.time()-result_age
     else:
         raise FailedFetchException("Failed to Fetch %s and didn't have it cached" % use_url)
 
@@ -510,7 +520,7 @@ def request_subways_literal(line):
     use_url = SUBWAY_FEED_DIR + line + ".txt"
 
     try:
-        text = get_text(use_url,refresh=75)[0]
+        text = get_text(use_url,refresh=20)[0]
     except FailedFetchException:
         logging.warning('request_subways: failed url: %s' % use_url)
         return {}

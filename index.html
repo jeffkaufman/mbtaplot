@@ -247,9 +247,11 @@ html,body,all
        }
 
        if (document.settings.snap.checked) {
-          cpol = snap_to_path(route, bus.dir, lat, lon);
-          lat = cpol[0];
-          lon = cpol[1];
+          if (!is_subway(route)) {
+            cpol = snap_to_path(route, bus.dir, lat, lon);
+            lat = cpol[0];
+            lon = cpol[1];
+          }
        }
 
        return [lat, lon]
@@ -343,9 +345,9 @@ html,body,all
 
 
       var update_interval = 15000;
-      if (is_subway(route)) {
-          update_interval = 45000;
-      }
+      //if (is_subway(route)) {
+      //    update_interval = 45000;
+      //}
 
       setInterval(function() { if (document.settings.running.checked) { update_buses(route); } },
                   update_interval);
