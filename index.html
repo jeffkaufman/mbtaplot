@@ -321,18 +321,25 @@ html,body,all
 
 
     function update_buses(route) {
-      $.getJSON('/Buses?route=' + route, function(buses) {
-          bus_cache[route] = [curtime(), buses];
-      });
+        $.getJSON('/Buses?route=' + route, function(buses) {
+            bus_cache[route] = [curtime(), buses];
+        });
     }
 
     function draw_buses_continual(map, busarr, route) {
       update_buses(route);
 
-      setInterval(function() {
-        plot_buses(map, busarr, route); },
+      setInterval(function()
+        {
+          if (document.settings.running.checked) {
+            plot_buses(map, busarr, route);
+          }
+        },
         500
       );
+
+      setInterval(function() { document.settings.running.checked = false; },
+                  5*60*1000);
 
 
       var update_interval = 15000;
@@ -340,10 +347,8 @@ html,body,all
           update_interval = 45000;
       }
 
-      setInterval(function() {
-        update_buses(route); },
-        update_interval
-      );
+      setInterval(function() { if (document.settings.running.checked) { update_buses(route); } },
+                  update_interval);
     }
 
     function draw_direction(route, direction, map, opacity, weight)
@@ -511,6 +516,7 @@ html,body,all
       <input type="checkbox" name="est" checked="{{est}}"> Estimate Locations &nbsp;&nbsp;&nbsp;
       <input type="checkbox" name="esth" checked="true"> Estimate Headings &nbsp;&nbsp;&nbsp;
       <input type="checkbox" name="snap" checked="{{snap}}"> Snap to Route &nbsp;&nbsp;&nbsp;
+      <input type="checkbox" name="running" checked="true"> Running &nbsp;&nbsp;&nbsp;
       <a href="/">other routes</a>
     </form>
 
