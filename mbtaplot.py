@@ -24,12 +24,12 @@ def is_subway(route):
 def get_xml(use_url, refresh=10):
     """ only update every /refresh/ seconds """
 
-    return minidom.parseString(get_text(use_url,refresh=refresh))
+    return get_text(use_url,refresh=refresh,isxml=True)
 
 class FailedFetchException(Exception):
     pass
 
-def get_text(use_url,refresh,cache={}):
+def get_text(use_url,refresh,isxml=False,cache={}):
 
     if use_url not in cache or time.time()-cache[use_url][0] > refresh:
         logging.info("fetch %s" % use_url)
@@ -38,18 +38,20 @@ def get_text(use_url,refresh,cache={}):
                                          "Pragma": "no-cache"})
         if result.status_code == 200:
             new_text = result.content
+            if isxml:
+                new_text = minidom.parseString(new_text)
             cache[use_url] = (time.time(), new_text)
         else:
             logging.warning("fetch failed status=%s %s" % (result.status_code,use_url))
 
     if use_url in cache:
-        return cache[use_url][1]
+        return cache[use_url][1], time.time()-cache[use_url][0]
     else:
         raise FailedFetchException("Failed to Fetch %s and didn't have it cached" % use_url)
 
 class DebugText(webapp.RequestHandler):
     def get(self):
-        self.response.out.write(get_text('http://developer.mbta.com/Data/Red.txt',refresh=2).replace("\n","<br>"))
+        self.response.out.write(get_text('http://developer.mbta.com/Data/Red.txt',refresh=2)[0].replace("\n","<br>"))
 
 short_names = {"Line": "SLM",
                "701": "CT1",
@@ -185,7 +187,7 @@ def request_subpaths(routes={}):
     """ like request_paths but for subways, all routes at once"""
 
     if not routes:
-        for x in get_text(SUBWAY_KEY,refresh=60*60*12).split("\n"):
+        for x in get_text(SUBWAY_KEY,refresh=60*60*12)[0].split("\n"):
             if x.startswith("Line,"):
                 continue
             try:
@@ -216,7 +218,7 @@ def request_paths(route_num, path_cache={}):
                                        ))
 
         try:
-            xmldoc = get_xml(use_url)
+            xmldoc, doc_age = get_xml(use_url)
         except FailedFetchException:
             logging.warning('request_paths: failed url: %s' % use_url)
             return [], {}, {}
@@ -252,11 +254,11 @@ def request_predictions(route_num, bus_hash):
 
     vehicle_predictions = {}
 
-    def updatePredictions(xmldoc):
+    def updatePredictions(xmldoc, doc_age):
         for predictions in xmldoc.getElementsByTagName("predictions"):
             stop = stops[predictions.getAttribute("stopTag")]
             for prediction in predictions.getElementsByTagName("prediction"):
-                minutes = int(prediction.getAttribute("minutes"))
+                minutes = int(prediction.getAttribute("minutes")) - int(doc_age/60)
                 vehicle = prediction.getAttribute("vehicle")
                 if vehicle not in bus_hash:
                     continue
@@ -281,12 +283,12 @@ def request_predictions(route_num, bus_hash):
             use_url += "&stops=%s|%s" % (route_num, stop.tag)
 
         try:
-            xmldoc = get_xml(use_url, refresh=60)
+            xmldoc, doc_age = get_xml(use_url, refresh=200)
         except FailedFetchException:
             logging.warning('request_predictions: failed url: %s' % use_url)
             return
 
-        updatePredictions(xmldoc)
+        updatePredictions(xmldoc, doc_age)
 
     # submit stops only N at a time
     # prevents urls from getting too long
@@ -313,7 +315,7 @@ def request_buses(route_num):
     bus_hash = {}
 
     try:
-        xmldoc = get_xml(use_url)
+        xmldoc, doc_age = get_xml(use_url)
     except FailedFetchException:
         logging.warning('request_buses: failed url: %s' % use_url)
         return bus_hash
@@ -339,7 +341,7 @@ def allRoutes():
                                        "a=mbta"))
 
     try:
-        xmldoc = get_xml(use_url)
+        xmldoc, doc_age = get_xml(use_url)
     except FailedFetchException:
         logging.warning('allRoutes: failed url: %s' % use_url)
         return []
@@ -477,7 +479,7 @@ class Arrivals(webapp.RequestHandler):
                                            "a=mbta",
                                            "stopId=%s" % stop))
             try:
-                xmldoc = get_xml(use_url)
+                xmldoc, doc_age = get_xml(use_url)
             except FailedFetchException:
                 logging.warning('Arrivals: failed url: %s' % use_url)
                 self.response.out.write(json.dumps(["error", []]))
@@ -489,7 +491,9 @@ class Arrivals(webapp.RequestHandler):
                 for direction in predictions.getElementsByTagName("direction"):
                     title = direction.getAttribute("title")
                     for prediction in direction.getElementsByTagName("prediction"):
-                        minutes = int(prediction.getAttribute("minutes"))
+                        minutes = int(prediction.getAttribute("minutes")) - int(doc_age/60)
+                        if minutes < 0:
+                            continue
                         p.append((minutes,route,title))
 
         p.sort()
@@ -506,7 +510,7 @@ def request_subways_literal(line):
     use_url = SUBWAY_FEED_DIR + line + ".txt"
 
     try:
-        text = get_text(use_url,refresh=75)
+        text = get_text(use_url,refresh=75)[0]
     except FailedFetchException:
         logging.warning('request_subways: failed url: %s' % use_url)
         return {}
