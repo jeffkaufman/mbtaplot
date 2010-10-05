@@ -66,10 +66,30 @@ input.submits
 
   <div class="references">
   <hr>
-  
+
   Created by <a href="http://sccs.swarthmore.edu/~cbr">Jeff Kaufman</a><br>
   Developer's notes at <a href="http://sccs.swarthmore.edu/~cbr/news/mbtaplot.html">mbtaplot notes</a><br>
   Source code at github: <a href="http://github.com/jeffkaufman/mbtaplot/">mbtaplot sources</a>
+
+  <p>
+
+  <h3>How it Works</h3>
+
+  The <a href="http://mbta.com">MBTA</a> makes real time bus
+  information available through <a
+  href="http://nextbus.com">NextBus</a>.  They make subway predictions
+  available through the <a
+  href="http://www.eot.state.ma.us/developers/">massDOT developer's
+  page</a>.  From this we can get information about where each vehicle
+  was reported last and where it's predicted to be next.  This
+  information is sent to your web browser, which draws the bus or
+  train moving between the stops using <a
+  href="http://en.wikipedia.org/wiki/Linear_interpolation">linear
+  interpolation</a>.  If you have any issues using this site or have
+  questions, send me an email at jeff at alum dot swarthmore dot edu
+  or put in an issue on the <a
+  href="http://github.com/jeffkaufman/mbtaplot/issues">bug tracker</a>.
+  
   </div>
   
 </body> </html>

@@ -480,20 +480,9 @@ html,body,all
       {% endif %}
     }
 
-    {% if all_routes %}
-      $.getJSON('/Routes', function(routes) {
-         for (route_no in routes) {
-            var tag = routes[route_no][0];
-            var title = routes[route_no][1];
-            draw_routes(map, tag, new Object());
-         }
-      });
-    {% else %}
-       {% for route in routes %}
-          draw_routes(map, "{{route}}", new Object());
-       {% endfor %}
-    {% endif %}
-
+    {% for route in routes %}
+        draw_routes(map, "{{route}}", new Object());
+    {% endfor %}
 
    }
 

@@ -645,25 +645,20 @@ class MainPage(webapp.RequestHandler):
         snap = self.request.get('snap').lower() != "false"
         est = self.request.get('est').lower() != "false"
 
-        all_routes = False
-
         routes = []
         routes_req = cgi.escape(self.request.get('routes'))
-        if routes_req == "all":
-            all_routes = True
-        elif routes_req:
+        if routes_req:
             routes = routes_req.split(",")
 
         for route in self.request.get_all("route"):
             routes.append(cgi.escape(route))
 
-        if not routes and not all_routes:
+        if not routes:
             path = os.path.join(os.path.dirname(__file__), 'chooser.html')
 
             template_values = {"routes": [{"tag": tag, "title": short_name(title)} for tag, title in allRoutes()]}
         else:
             template_values = {"shading": shading,
-                               "all_routes": all_routes,
                                "snap": snap,
                                "est": est,
                                "stops": stops,
