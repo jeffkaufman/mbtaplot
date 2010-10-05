@@ -54,15 +54,15 @@ html,body,all
       if (route in colors) { return colors[route][active]; }
       else { return colors["Bus"][active]; }
    }
-     
+
 
    function is_subway(route) {
      return route == "Red" || route == "Blue" || route == "Orange";
    }
 
-   function color_paths(route, direction) 
+   function color_paths(route, direction)
    {
-      if (current_colored_path) 
+      if (current_colored_path)
       {
          color_path(current_colored_path[0],
                     current_colored_path[1],
@@ -74,18 +74,18 @@ html,body,all
       current_colored_path = [route, direction];
    }
 
-      
 
 
-   function color_path(route, direction, color, opacity) 
+
+   function color_path(route, direction, color, opacity)
    {
-      if (!(route in path_lines) || !(direction in path_lines[route])) 
+      if (!(route in path_lines) || !(direction in path_lines[route]))
       {
          return
       }
       var paths = path_lines[route][direction];
-      
-      for (path_no in paths) 
+
+      for (path_no in paths)
       {
          paths[path_no].setOptions({
                "strokeColor" : color,
@@ -93,12 +93,12 @@ html,body,all
                   });
       }
    }
-      
-         
-                  
-               
-         
-      
+
+
+
+
+
+
 
    var stop_image = new google.maps.MarkerImage(
        "static/stop.png",
@@ -293,7 +293,7 @@ html,body,all
 
           var blatlng = new google.maps.LatLng(lat_lon[0], lat_lon[1]);
 
-          function make_marker() 
+          function make_marker()
           {
              var bmarker = new google.maps.Marker({
                    position: blatlng,
@@ -304,7 +304,7 @@ html,body,all
                 color_paths(bmarker.bus_route, bmarker.bus_direction);
              });
              return bmarker;
-             
+
           }
 
           if (!(busid in busarr)) {
@@ -334,16 +334,22 @@ html,body,all
         500
       );
 
+
+      var update_interval = 15000;
+      if (is_subway(route)) {
+          update_interval = 45000;
+      }
+
       setInterval(function() {
         update_buses(route); },
-        15000
+        update_interval
       );
     }
 
-    function draw_direction(route, direction, map, opacity, weight) 
+    function draw_direction(route, direction, map, opacity, weight)
     {
        var paths = path_cache[route][direction];
-               
+
        for (path_no in paths) {
           var coords = new Array();
           for (point_no in paths[path_no]) {
@@ -351,22 +357,22 @@ html,body,all
              update_bounds(point.lat, point.lon)
                 coords.push( new google.maps.LatLng(point.lat, point.lon) );
           }
-          
+
           var buspath = new google.maps.Polyline({
             path: coords,
                 strokeColor: get_color("inactive",route),
                 strokeOpacity: opacity,
                 strokeWeight: weight
                 });
-          
+
           buspath.setMap(map);
           google.maps.event.addListener(buspath, "click", function() {
              //draw_buses(map, busarr, route);
           });
-          
+
           path_lines[route][direction].push(buspath);
        }
-    }       
+    }
 
     function draw_routes(map, route, busarr) {
 
@@ -386,21 +392,21 @@ html,body,all
             path_cache[route] = r.directions;
             path_lines[route] = new Object();
 
-            for (direction in path_cache[route]) 
+            for (direction in path_cache[route])
             {
                path_lines[route][direction] = new Array();
                draw_direction(route, direction, map, opacity, weight);
             }
 
             recenter();
-            
+
 
             {% if stops %}
               stop_info_window = new google.maps.InfoWindow({
                     content: "not set yet"
               });
 
-              function plot_stop(stop) 
+              function plot_stop(stop)
               {
                  var slatlng = new google.maps.LatLng(stop.lat, stop.lon);
 
@@ -416,7 +422,7 @@ html,body,all
                     t = "<h3>" + stop.title + "</h3>";
                     stop_info_window.setContent(t + "<tt>[loading ...]</tt>");
 
-                    $.getJSON('/Arrivals?stop=' + stop.tag, function(arrival_info) 
+                    $.getJSON('/Arrivals?stop=' + stop.tag, function(arrival_info)
                     {
                        var arrival_status = arrival_info[0];
                        var arrivals = arrival_info[1];
@@ -429,7 +435,7 @@ html,body,all
                        }
                        else {
                            t += "<table border=\"0\">";
-                           for (arrival_no in arrivals) 
+                           for (arrival_no in arrivals)
                            {
                               var minutes = arrivals[arrival_no][0];
                               var route = arrivals[arrival_no][1];
@@ -441,20 +447,20 @@ html,body,all
                               t += "<tr><td align=\"right\">" + minutes + ":</td><td>" + route + " " + title + "</td></tr>";
                            }
                            t += "</table>";
-                       }                       
-                       
+                       }
+
                        stop_info_window.setContent(t);
                     });
-                       
+
                     stop_info_window.open(map,smarker);
 
                  });
               }
-              
+
               for (stop_no in r.stops) {
                  plot_stop(r.stops[stop_no]);
               }
-         
+
             {% endif %}
 
             {% if buses %}
@@ -504,8 +510,11 @@ html,body,all
     <form name="settings">
       <input type="checkbox" name="est" checked="{{est}}"> Estimate Locations &nbsp;&nbsp;&nbsp;
       <input type="checkbox" name="esth" checked="true"> Estimate Headings &nbsp;&nbsp;&nbsp;
-      <input type="checkbox" name="snap" checked="{{snap}}"> Snap to Route
+      <input type="checkbox" name="snap" checked="{{snap}}"> Snap to Route &nbsp;&nbsp;&nbsp;
+      <a href="/">other routes</a>
     </form>
+
+
 
   </div>
   </div>

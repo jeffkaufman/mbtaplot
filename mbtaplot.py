@@ -30,7 +30,7 @@ class FailedFetchException(Exception):
     pass
 
 def get_text(use_url,refresh,cache={}):
-    
+
     if use_url not in cache or time.time()-cache[use_url][0] > refresh:
         logging.info("fetch %s" % use_url)
         result = urlfetch.fetch(url=use_url,
@@ -61,7 +61,7 @@ short_names = {"Line": "SLM",
 def short_name(x):
     x = str(x).split()[-1]
     return short_names.get(x,x)
-    
+
 def uncanonical_stops(canonical_stop):
     subpaths = request_subpaths()
     return [substop.stop
@@ -72,7 +72,7 @@ def uncanonical_stops(canonical_stop):
 def get_substop_arrivals(stop):
     substop = get_substop_info(stop)
     trips = []
-    
+
     ustops = uncanonical_stops(substop.canonical_stop)
 
     for route in request_subpaths():
@@ -80,10 +80,10 @@ def get_substop_arrivals(stop):
             stop_info.sort()
             for wait, stopn, direction in stop_info:
                 if stopn in ustops:
-                    last_stop_wait, last_stop, last_stop_direction = stop_info[-1] 
+                    last_stop_wait, last_stop, last_stop_direction = stop_info[-1]
                     substop_target = get_substop_info(last_stop)
                     stop_desc_target = substop_target.stop_desc
-                    stop_desc_target = stop_desc_target.replace(" Station","") 
+                    stop_desc_target = stop_desc_target.replace(" Station","")
                     if wait < 0:
                         continue
                     trips.append((wait/60, route + " Line", stop_desc_target))
@@ -146,7 +146,7 @@ class Bus(object):
         s.routeTag = line
 
         s.type = "subway"
-        
+
         return s
 
 
@@ -191,7 +191,7 @@ def request_subpaths(routes={}):
             try:
                 substop = SubStop(x)
             except ValueError:
-                continue                
+                continue
 
             if substop.route not in routes:
                 routes[substop.route] = []
@@ -343,8 +343,8 @@ def allRoutes():
     except FailedFetchException:
         logging.warning('allRoutes: failed url: %s' % use_url)
         return []
-    
-    
+
+
     allr = []
     allr.extend([("Red", "Red"),("Orange","Orng"), ("Blue","Blue")])
     allr.extend([[route.getAttribute("tag"), route.getAttribute("title")]
@@ -416,7 +416,7 @@ class Paths(webapp.RequestHandler):
             direction_structure[direction] = [[{"lat": point.lat, "lon": point.lon} for point in path]
                                               for path in paths
                                               if path.is_for(direction)]
-            
+
         stop_structure = [{"lat": stop.lat, "lon": stop.lon, "title" : stop.title, "tag": stop.tag}
                           for stop in stops.values()]
 
@@ -491,7 +491,7 @@ class Arrivals(webapp.RequestHandler):
                     for prediction in direction.getElementsByTagName("prediction"):
                         minutes = int(prediction.getAttribute("minutes"))
                         p.append((minutes,route,title))
-                        
+
         p.sort()
         self.response.out.write(json.dumps(["none" if not p else "ok", p]))
 
@@ -518,7 +518,7 @@ def request_subways_literal(line):
         except ValueError:
             sys.stderr.write(x+"\n")
             continue
-        
+
         if rev != "Revenue":
             continue
 
@@ -531,7 +531,7 @@ def request_subways_literal(line):
                 t_hr = int(t_hr)+12
             t = int(t_hr)*60*60+int(t_min)*60+int(t_sec)
             return t
-        
+
         t_then = to_sec(t,ampm)
         now_local = datetime.datetime.now(tz_boston).strftime("%H:%M:%S")
         t_now = to_sec(now_local, "AM")
@@ -558,7 +558,7 @@ def request_subways(route):
     for trip, stop_info in request_subways_literal(route).items():
         if not stop_info:
             continue
-        
+
         wait_j,stop_j,direction_j = stop_info[0]
 
         if len(stop_info) > 1:
@@ -609,6 +609,18 @@ class Buses(webapp.RequestHandler):
         self.response.out.write(json.dumps(
                 [bus.sendable() for bus in self.buses(route).values()]))
 
+class Subways(webapp.RequestHandler):
+    def get(self):
+        template_values = {"routes": ["Red", "Orange", "Blue"],
+                           "buses": True,
+                           "stops": True,
+                           "shading": False,
+                           "est": True,
+                           "snap": False,
+                           }
+        path = os.path.join(os.path.dirname(__file__), 'index.html')
+        self.response.out.write(template.render(path, template_values))
+
 class MainPage(webapp.RequestHandler):
 
     def get(self):
@@ -649,6 +661,7 @@ class MainPage(webapp.RequestHandler):
         self.response.out.write(template.render(path, template_values))
 
 application = webapp.WSGIApplication([('/', MainPage),
+                                      ('/subways', Subways),
                                       ('/Paths', Paths),
                                       ('/Buses', Buses),
                                       ('/Routes', Routes),
