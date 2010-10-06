@@ -593,12 +593,12 @@ def request_subways(route):
         else:
             wait_i,stop_i,direction_i = stop_info[0]
 
-        # ashmont trains are only marked as ashmont route when
-        # southbound.  set this mark on northbound ones if they've been
-        # to any ashmont stop.  This will become incorrect once they're
-        # on the trunk, but oh well.
-        if route == "Red" and visited_ashmont_stop(stop_info):
-            direction_i = direction_i = "1" # mark as ashmont line
+        # the direction/branch flag is often set wrong on trains
+        if route == "Red":
+            if visited_ashmont_stop(stop_info):
+                direction_i = direction_i = "1" # mark as ashmont line
+            else:
+                direction_i = direction_i = "0" # mark as braintree
 
         subways[trip] = Bus.make_subway(trip, route,
                                         wait_i, stop_i, direction_i,
