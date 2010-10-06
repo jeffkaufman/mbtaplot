@@ -247,11 +247,9 @@ html,body,all
        }
 
        if (document.settings.snap.checked) {
-          if (!is_subway(route)) {
-            cpol = snap_to_path(route, bus.dir, lat, lon);
-            lat = cpol[0];
-            lon = cpol[1];
-          }
+         cpol = snap_to_path(route, bus.dir, lat, lon);
+         lat = cpol[0];
+         lon = cpol[1];
        }
 
        return [lat, lon]

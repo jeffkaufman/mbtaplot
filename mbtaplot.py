@@ -414,6 +414,13 @@ class Direction(object):
         self.stops = [stops[s.getAttribute("tag")]
                       for s in xml_direction.getElementsByTagName("stop")]
 
+def is_ashmont_stop(stop, astops=[]):
+    if not astops:
+        for substop in request_subpaths()["Red"]:
+            if substop.branch == "Ashmont":
+                astops.append(substop.stop)
+    return stop in astops
+
 class Paths(webapp.RequestHandler):
     cache = {}
 
@@ -567,6 +574,12 @@ def request_subways_literal(line):
 
     return trips
 
+def visited_ashmont_stop(stop_info):
+    for wait, stop, direction in stop_info:
+        if is_ashmont_stop(stop):
+            return True
+    return False
+    
 def request_subways(route):
     subways = {}
     for trip, stop_info in request_subways_literal(route).items():
@@ -579,6 +592,13 @@ def request_subways(route):
             wait_i,stop_i,direction_i = stop_info[1]
         else:
             wait_i,stop_i,direction_i = stop_info[0]
+
+        # ashmont trains are only marked as ashmont route when
+        # southbound.  set this mark on northbound ones if they've been
+        # to any ashmont stop.  This will become incorrect once they're
+        # on the trunk, but oh well.
+        if route == "Red" and visited_ashmont_stop(stop_info):
+            direction_i = direction_i = "1" # mark as ashmont line
 
         subways[trip] = Bus.make_subway(trip, route,
                                         wait_i, stop_i, direction_i,
