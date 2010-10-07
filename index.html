@@ -42,6 +42,63 @@ html,body,all
 
    var current_colored_path = null;
 
+
+   /* all this Overlay stuff is to get projections */
+   /* from: http://stackoverflow.com/questions/1538681/how-to-call-fromlatlngtodivpixel-in-google-maps-api-v3 */
+   function MyOverlay(options) {
+      this.setValues(options);
+      var div = this.div_= document.createElement('div');
+      div.className = "overlay";
+   };
+   MyOverlay.prototype = new google.maps.OverlayView;
+   MyOverlay.prototype.onAdd = function() { var pane = this.getPanes().overlayLayer; pane.appendChild(this.div_); }
+   MyOverlay.prototype.onRemove = function() { this.div_.parentNode.removeChild(this.div_); }
+   MyOverlay.prototype.draw = function() {}
+
+   stop_markers = new Array();
+
+   function merge_stop_predictions(map) {
+     var OverLayMap = new MyOverlay( { map: map } );
+
+     for (i in stop_markers) {
+        stop_markers[i].titles = [];
+        stop_markers[i].stop_tags = [stop_markers[i].stop_tag];
+     }
+
+     var p = OverLayMap.getProjection();
+     if (p == undefined) {
+        return;
+     }
+
+
+     function pixel_distance(marker_i, marker_j) {
+        var p_i = p.fromLatLngToDivPixel(marker_i.getPosition());
+        var p_j = p.fromLatLngToDivPixel(marker_j.getPosition());
+
+        return distance(p_i.x, p_i.y, p_j.x, p_j.y);            
+     }
+        
+     for (i in stop_markers) {
+        for (j in stop_markers) {
+           if (i > j) {
+               var stop_i = stop_markers[i];
+               var stop_j = stop_markers[j];
+               var pd = pixel_distance(stop_i, stop_j);
+               if (pd < 5) {
+                   if (stop_i.title != stop_j.title) {
+                      if ($.inArray(stop_j.title, stop_i.titles) == -1) { stop_i.titles.push(stop_j.title); }
+                      if ($.inArray(stop_i.title, stop_j.titles) == -1) { stop_j.titles.push(stop_i.title); }
+                   }
+                   if ($.inArray(stop_j.stop_tag, stop_i.stop_tags) == -1) { stop_i.stop_tags.push(stop_j.stop_tag); }
+                   if ($.inArray(stop_i.stop_tag, stop_j.stop_tags) == -1) { stop_j.stop_tags.push(stop_i.stop_tag); }
+                   //console.debug("merged " + stop_j.title + " and " + stop_i.title + " (" + pd + ")");
+               }
+            }
+         }
+      }
+   }
+                   
+
    function get_color(active, route) {
       colors = {"Red": {"active": "#CC0000",
                         "inactive": "#FF0000"},
@@ -418,44 +475,79 @@ html,body,all
                  var smarker = new google.maps.Marker({
                     position: slatlng,
                     title: stop.title,
+                    titles: [],
+                    stop_tag: stop.tag,
+                    stop_tags: [stop.tag],
                     icon: stop_image,
 
                     map: map
                  });
 
+                 stop_markers.push(smarker);
+
                  google.maps.event.addListener(smarker, "click", function() {
-                    t = "<h3>" + stop.title + "</h3>";
-                    stop_info_window.setContent(t + "<tt>[loading ...]</tt>");
 
-                    $.getJSON('/Arrivals?stop=' + stop.tag, function(arrival_info)
-                    {
-                       var arrival_status = arrival_info[0];
-                       var arrivals = arrival_info[1];
+                    t = "<h3>" + stop.title;
+                    for (title_no in smarker.titles) {
+                       t += " / " + smarker.titles[title_no];
+                    } 
+                    t += "</h3>";
 
-                       if (arrival_status == "error") {
-                           t += "Predictions unavailable"
-                       }
-                       else if (arrival_status == "none") {
-                           t += "No predicted stops"
-                       }
-                       else {
-                           t += "<table border=\"0\">";
-                           for (arrival_no in arrivals)
-                           {
-                              var minutes = arrivals[arrival_no][0];
-                              var route = arrivals[arrival_no][1];
-                               var title = arrivals[arrival_no][2];
+                    var all_arrivals = new Array();
+                    var errors = new Array();
 
-                              if (minutes == "0") { minutes = "nowish"; }
-                              else { minutes += "min" ; }
+                    t += "<table border=\"0\">";
 
-                              t += "<tr><td align=\"right\">" + minutes + ":</td><td>" + route + " " + title + "</td></tr>";
-                           }
-                           t += "</table>";
-                       }
+                    stop_info_window.setContent(t + "<tr><td><tt>[loading ...]</tt></table>");
 
-                       stop_info_window.setContent(t);
-                    });
+                    function update_arrivals(arrival_info) {
+
+                         var arrival_status = arrival_info[0];
+                         var arrivals = arrival_info[1];
+                         var stop_tag = arrival_info[2];
+  
+                         if (arrival_status == "error") {
+                             errors.push([stop_tag, "Predictions unavailable"]);
+                         }
+                         else if (arrival_status == "none") {
+                             //errors.push([stop_tag, "No predicted service"]);
+                         }
+                         else {
+                             for (arrival_no in arrivals)
+                             {
+                                all_arrivals.push([arrivals[arrival_no][0], arrivals[arrival_no][1], arrivals[arrival_no][2]]);
+                             }
+                         }
+
+                         all_arrivals.sort(function(a,b) {
+                            return a[0]-b[0];
+                         });
+
+                         var temp_t = t;
+
+                         for (all_arrival_no in all_arrivals) {
+                            var minutes = all_arrivals[all_arrival_no][0];
+                            var route = all_arrivals[all_arrival_no][1];
+                            var title = all_arrivals[all_arrival_no][2];
+
+                            if (minutes == "0") { minutes = "nowish"; }
+                            else { minutes += "min" ; }
+  
+                            temp_t += "<tr><td align=\"right\">" + minutes + ":</td><td>" + route + " " + title + "</td></tr>";
+                         }
+
+                         for (error_no in errors) {
+                            temp_t += "<tr><td>Stop " + errors[error_no][0] + ":<td>" + errors[error_no][1];
+                         }
+
+                         stop_info_window.setContent(temp_t + "</table>");
+                    }
+
+                    for (tag_no in smarker.stop_tags) {
+                       $.getJSON('/Arrivals?stop=' + smarker.stop_tags[tag_no], function(arrival_info) {
+                          update_arrivals(arrival_info);    
+                       });
+                    }
 
                     stop_info_window.open(map,smarker);
 
@@ -465,6 +557,8 @@ html,body,all
               for (stop_no in r.stops) {
                  plot_stop(r.stops[stop_no]);
               }
+
+              merge_stop_predictions(map);
 
             {% endif %}
 
@@ -482,6 +576,10 @@ html,body,all
         draw_routes(map, "{{route}}", new Object());
     {% endfor %}
 
+    google.maps.event.addListener(map, 'zoom_changed', function() {
+       merge_stop_predictions(map);        
+    });
+                         
    }
 
 

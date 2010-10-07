@@ -30,6 +30,12 @@ def get_xml(use_url, refresh=10):
 class FailedFetchException(Exception):
     pass
 
+class InvalidRouteException(Exception):
+    pass
+
+class InvalidStopException(Exception):
+    pass
+
 def get_text(use_url,refresh,isxml=False,cache=memcache.Client()):
     cached_val = cache.get(use_url)
     if cached_val:
@@ -74,24 +80,15 @@ def short_name(x):
     x = str(x).split()[-1]
     return short_names.get(x,x)
 
-def uncanonical_stops(canonical_stop):
-    subpaths = request_subpaths()
-    return [substop.stop
-            for route in subpaths
-            for substop in subpaths[route]
-            if canonical_stop == substop.canonical_stop]
-
 def get_substop_arrivals(stop):
     substop = get_substop_info(stop)
     trips = []
-
-    ustops = uncanonical_stops(substop.canonical_stop)
 
     for route in request_subpaths():
         for trip, stop_info in request_subways_literal(route).items():
             stop_info.sort()
             for wait, stopn, direction in stop_info:
-                if stopn in ustops:
+                if stopn == stop:
                     last_stop_wait, last_stop, last_stop_direction = stop_info[-1]
                     substop_target = get_substop_info(last_stop)
                     stop_desc_target = substop_target.stop_desc
@@ -107,20 +104,20 @@ def get_substop_info(stop):
         for substop in substops:
             if substop.stop == stop:
                 return substop
-    raise Exception("unknown stop %s" % stop)
+    raise InvalidStopException("unknown stop %s" % stop)
 
 def subway_station_loc(route, stop):
     subpaths = request_subpaths()
     try:
         substops = subpaths[route]
     except ValueError:
-        raise Exception("%s not found" % route)
+        raise InvalidRouteException("%s not found" % route)
 
     for substop in substops:
         if substop.stop == stop:
             return substop.lat, substop.lon
 
-    raise Exception("%s.%s not found" % (route, stop))
+    raise InvalidStopException("%s.%s not found" % (route, stop))
 
 class Bus(object):
     def __init__(self, xml_vehicle):
@@ -190,8 +187,9 @@ class Bus(object):
 
 class SubStop(object):
     def __init__(self, strstop):
-        self.route, self.stop,_,self.canonical_stop,_,_,_,self.branch,_,_,_,self.stop_desc,_,self.lat,self.lon = strstop.strip().split(',')
+        self.route, self.stop,_,_,_,_,_,self.branch,_,_,_,self.stop_desc,_,self.lat,self.lon = strstop.strip().split(',')
         self.lat, self.lon = float(self.lat), float(self.lon)
+
 
 def request_subpaths(routes={}):
     """ like request_paths but for subways, all routes at once"""
@@ -490,7 +488,11 @@ class Arrivals(webapp.RequestHandler):
         stop = cgi.escape(self.request.get('stop'))
 
         if stop.isalpha():
-            p = get_substop_arrivals(stop)
+            try:
+                p = get_substop_arrivals(stop)
+            except (InvalidRouteException, InvalidStopException):
+                self.response.out.write(json.dumps(["error", []]))
+                return
         else:
             use_url = BUS_FEED + "&".join(("command=predictions",
                                            "a=mbta",
@@ -514,7 +516,7 @@ class Arrivals(webapp.RequestHandler):
                         p.append((minutes,route,title))
 
         p.sort()
-        self.response.out.write(json.dumps(["none" if not p else "ok", p]))
+        self.response.out.write(json.dumps(["none" if not p else "ok", p,stop]))
 
 
 class Routes(webapp.RequestHandler):
@@ -579,7 +581,7 @@ def visited_ashmont_stop(stop_info):
         if is_ashmont_stop(stop):
             return True
     return False
-    
+
 def request_subways(route):
     subways = {}
     for trip, stop_info in request_subways_literal(route).items():
