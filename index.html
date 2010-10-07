@@ -75,16 +75,16 @@ html,body,all
         var p_i = p.fromLatLngToDivPixel(marker_i.getPosition());
         var p_j = p.fromLatLngToDivPixel(marker_j.getPosition());
 
-        return distance(p_i.x, p_i.y, p_j.x, p_j.y);            
+        return distance(p_i.x, p_i.y, p_j.x, p_j.y);
      }
-        
+
      for (i in stop_markers) {
         for (j in stop_markers) {
            if (i > j) {
                var stop_i = stop_markers[i];
                var stop_j = stop_markers[j];
                var pd = pixel_distance(stop_i, stop_j);
-               if (pd < 5) {
+               if (pd < 5*5) {
                    if (stop_i.title != stop_j.title) {
                       if ($.inArray(stop_j.title, stop_i.titles) == -1) { stop_i.titles.push(stop_j.title); }
                       if ($.inArray(stop_i.title, stop_j.titles) == -1) { stop_j.titles.push(stop_i.title); }
@@ -97,7 +97,7 @@ html,body,all
          }
       }
    }
-                   
+
 
    function get_color(active, route) {
       colors = {"Red": {"active": "#CC0000",
@@ -490,7 +490,7 @@ html,body,all
                     t = "<h3>" + stop.title;
                     for (title_no in smarker.titles) {
                        t += " / " + smarker.titles[title_no];
-                    } 
+                    }
                     t += "</h3>";
 
                     var all_arrivals = new Array();
@@ -505,7 +505,7 @@ html,body,all
                          var arrival_status = arrival_info[0];
                          var arrivals = arrival_info[1];
                          var stop_tag = arrival_info[2];
-  
+
                          if (arrival_status == "error") {
                              errors.push([stop_tag, "Predictions unavailable"]);
                          }
@@ -532,7 +532,7 @@ html,body,all
 
                             if (minutes == "0") { minutes = "nowish"; }
                             else { minutes += "min" ; }
-  
+
                             temp_t += "<tr><td align=\"right\">" + minutes + ":</td><td>" + route + " " + title + "</td></tr>";
                          }
 
@@ -545,7 +545,7 @@ html,body,all
 
                     for (tag_no in smarker.stop_tags) {
                        $.getJSON('/Arrivals?stop=' + smarker.stop_tags[tag_no], function(arrival_info) {
-                          update_arrivals(arrival_info);    
+                          update_arrivals(arrival_info);
                        });
                     }
 
@@ -577,9 +577,10 @@ html,body,all
     {% endfor %}
 
     google.maps.event.addListener(map, 'zoom_changed', function() {
-       merge_stop_predictions(map);        
+       merge_stop_predictions(map);
     });
-                         
+    merge_stop_predictions(map);
+
    }
 
 
