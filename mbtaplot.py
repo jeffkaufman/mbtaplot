@@ -179,8 +179,8 @@ class Bus(object):
             "lon_j": self.lon,
             "id": self.id,
             "dir": self.dirTag,
-            "age_i": int(self.predAge),
-            "age_j": int(self.age),
+            "age_i": int(self.predAge+.5),
+            "age_j": int(self.age+.5),
             "rhead": self.round_heading,
             }
 
@@ -557,7 +557,7 @@ def request_subways_literal(line):
 
         t_then = to_sec(t,ampm)
         now_local = datetime.datetime.now(tz_boston).strftime("%H:%M:%S")
-        t_now = to_sec(now_local, "AM")
+        t_now = to_sec(now_local, "NA")
 
         if n not in trips:
             trips[n] = []
