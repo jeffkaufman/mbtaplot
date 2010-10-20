@@ -73,7 +73,9 @@ short_names = {"Line": "SLM",
                "701": "CT1",
                "747": "CT2S",
                "748": "CT2N",
-               "708" : "CT3"
+               "708" : "CT3",
+               "CT2-South": "CT2S",
+               "CT2-North": "CT2N",
                }
 
 def short_name(x):
