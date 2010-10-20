@@ -30,15 +30,20 @@ html,body,all
     src="http://maps.google.com/maps/api/js?sensor=false">
 </script>
 <script type="text/javascript">
+
    var default_path_opacity = 0.5;
    var active_path_opacity = 1.0;
 
-
+   // route ->
+   //  enabled -> true/false
+   //  path_cache -> direction -> paths[points[]]
+   //  path_lines -> direction -> polylines[]
+   //  bus_cache -> [last update, businfo]
+   //  buses[]
+   var routes = new Object(); 
+                              
 
    var image_cache = new Object(); // heading -> marker
-   var path_cache = new Object();  // route -> direction -> paths[points[]]
-   var path_lines = new Object();  // route -> direction -> polylines[]
-   var bus_cache = new Object();   // route -> bus[]
 
    var current_colored_path = null;
 
@@ -136,11 +141,11 @@ html,body,all
 
    function color_path(route, direction, color, opacity)
    {
-      if (!(route in path_lines) || !(direction in path_lines[route]))
+      if (!(route in routes) || !("path_lines" in routes[route]) || !(direction in routes[route].path_lines))
       {
          return
       }
-      var paths = path_lines[route][direction];
+      var paths = routes[route].path_lines[direction];
 
       for (path_no in paths)
       {
@@ -223,12 +228,12 @@ html,body,all
      var best_line = null;
      var best_dist = null;
 
-     if (!(route in path_cache) || !(dir in path_cache[route])) {
+     if (!(route in routes) || !("path_cache" in routes[route]) || !(dir in routes[route].path_cache)) {
         return [lat, lon];
      }
 
      // only consider paths for this route in this direction
-     var paths = path_cache[route][dir];
+     var paths = routes[route].path_cache[dir];
 
      for (path_no in paths) {
         for (point_no in paths[path_no]) {
@@ -314,12 +319,12 @@ html,body,all
 
 
     function plot_buses(map, busarr, route) {
-       if (!(route in bus_cache)) {
+       if (!(route in routes) || !("bus_cache" in routes[route])) {
           return;
        }
 
-       timestamp = bus_cache[route][0];
-       buses = bus_cache[route][1];
+       timestamp = routes[route].bus_cache[0];
+       buses = routes[route].bus_cache[1];
 
        for (bus_no in buses) {
           var bus = buses[bus_no];
@@ -377,40 +382,50 @@ html,body,all
     }
 
 
-    function update_buses(route) {
-        $.getJSON('/Buses?route=' + route, function(buses) {
-            bus_cache[route] = [curtime(), buses];
-        });
+    function update_buses() {
+       for (route in routes) {
+          if (routes[route].enabled) {
+             $.getJSON('/Buses?route=' + route, function(buses) {
+                routes[route].bus_cache = [curtime(), buses];
+             });
+          }
+       }
     }
 
-    function draw_buses_continual(map, busarr, route) {
-      update_buses(route);
 
-      setInterval(function()
-        {
+
+    function plot_continual() {
           if (document.settings.running.checked) {
-            plot_buses(map, busarr, route);
+            for (route in routes) {
+              if (routes[route].enabled) {
+                plot_buses(map, routes[route].buses, route);
+              }
+            }
           }
-        },
-        500
-      );
+          window.setTimeout(plot_continual,500);
+    }
+
+    function update_continual() {
+        if (document.settings.running.checked) {
+          update_buses();
+        }
+        window.setTimeout(update_continual,15000);
+    }
+
+
+    function draw_buses_continual(map) {
+      update_buses();
+      plot_continual();
 
       setInterval(function() { document.settings.running.checked = false; },
                   5*60*1000);
 
-
-      var update_interval = 15000;
-      //if (is_subway(route)) {
-      //    update_interval = 45000;
-      //}
-
-      setInterval(function() { if (document.settings.running.checked) { update_buses(route); } },
-                  update_interval);
+      update_continual();
     }
 
     function draw_direction(route, direction, map, opacity, weight)
     {
-       var paths = path_cache[route][direction];
+       var paths = routes[route].path_cache[direction];
 
        for (path_no in paths) {
           var coords = new Array();
@@ -432,31 +447,25 @@ html,body,all
              //draw_buses(map, busarr, route);
           });
 
-          path_lines[route][direction].push(buspath);
+          routes[route].path_lines[direction].push(buspath);
        }
     }
 
-    function draw_routes(map, route, busarr) {
 
-      {% if shading %}
-      $.getJSON('/Buses?route=' + route, function(buses) {
-         var n_buses = buses.length;
-         var opacity = n_buses/10;
-         //var opacity = 1.0;
-         var weight = n_buses/8+1;
-         //var weight = n_buses/4+1;
-      {% else %}
-         var opacity = default_path_opacity;
-         var weight = 3.0;
-      {% endif %}
+    function draw_route(map, route) {
 
          $.getJSON('/Paths?route=' + route, function(r) {
-            path_cache[route] = r.directions;
-            path_lines[route] = new Object();
 
-            for (direction in path_cache[route])
+            var opacity = default_path_opacity;
+            var weight = 3.0;
+
+            routes[route].path_cache = r.directions;
+            routes[route].path_lines = new Object();
+            routes[route].buses = new Array();
+
+            for (direction in routes[route].path_cache)
             {
-               path_lines[route][direction] = new Array();
+               routes[route].path_lines[direction] = new Array();
                draw_direction(route, direction, map, opacity, weight);
             }
 
@@ -562,24 +571,32 @@ html,body,all
 
             {% endif %}
 
-            {% if buses %}
-               draw_buses_continual(map, busarr, route);
-            {% endif %}
          });
 
-      {% if shading %}
-      });
-      {% endif %}
+    }
+
+    function enable_route(route) {
+      if (route in routes) {
+         return;
+      }
+      routes[route] = {enabled: true};
+      draw_route(map, route);
     }
 
     {% for route in routes %}
-        draw_routes(map, "{{route}}", new Object());
+        enable_route("{{route}}");
     {% endfor %}
+
 
     google.maps.event.addListener(map, 'zoom_changed', function() {
        merge_stop_predictions(map);
     });
     merge_stop_predictions(map);
+
+
+    {% if buses %}
+       draw_buses_continual(map);
+    {% endif %}
 
    }
 
