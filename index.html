@@ -35,13 +35,13 @@ html,body,all
    var active_path_opacity = 1.0;
 
    // route ->
-   //  enabled -> true/false
    //  path_cache -> direction -> paths[points[]]
    //  path_lines -> direction -> polylines[]
    //  bus_cache -> [last update, businfo]
+   //  stops[]
    //  buses[]
-   var routes = new Object(); 
-                              
+   var routes = new Object();
+
 
    var image_cache = new Object(); // heading -> marker
 
@@ -60,10 +60,15 @@ html,body,all
    MyOverlay.prototype.onRemove = function() { this.div_.parentNode.removeChild(this.div_); }
    MyOverlay.prototype.draw = function() {}
 
-   stop_markers = new Array();
-
    function merge_stop_predictions(map) {
      var OverLayMap = new MyOverlay( { map: map } );
+
+     stop_markers = [];
+     for (route in routes) {
+       for (stop_no in routes[route].stops) {
+         stop_markers.push(routes[route].stops[stop_no]);
+       }
+     }
 
      for (i in stop_markers) {
         stop_markers[i].titles = [];
@@ -319,12 +324,18 @@ html,body,all
 
 
     function plot_buses(map, busarr, route) {
+
        if (!(route in routes) || !("bus_cache" in routes[route])) {
           return;
        }
 
        timestamp = routes[route].bus_cache[0];
        buses = routes[route].bus_cache[1];
+
+       if (!buses || !busarr) {
+         return;
+       }
+
 
        for (bus_no in buses) {
           var bus = buses[bus_no];
@@ -381,46 +392,43 @@ html,body,all
        }
     }
 
+    function update_route_buses(route) {
+         $.getJSON('/Buses?route=' + route, function(buses) {
+            routes[route].bus_cache = [curtime(), buses];
+         });
+    }
 
     function update_buses() {
        for (route in routes) {
-          if (routes[route].enabled) {
-             $.getJSON('/Buses?route=' + route, function(buses) {
-                routes[route].bus_cache = [curtime(), buses];
-             });
-          }
+          update_route_buses(route);
        }
     }
 
-
-
     function plot_continual() {
-          if (document.settings.running.checked) {
-            for (route in routes) {
-              if (routes[route].enabled) {
+       if (document.settings.running.checked) {
+          for (route in routes) {
                 plot_buses(map, routes[route].buses, route);
-              }
-            }
           }
-          window.setTimeout(plot_continual,500);
+       }
     }
 
     function update_continual() {
         if (document.settings.running.checked) {
           update_buses();
         }
-        window.setTimeout(update_continual,15000);
     }
 
 
     function draw_buses_continual(map) {
-      update_buses();
+      update_continual();
       plot_continual();
+
+      setInterval( plot_continual, 500);
 
       setInterval(function() { document.settings.running.checked = false; },
                   5*60*1000);
 
-      update_continual();
+      setInterval( update_continual, 15000);
     }
 
     function draw_direction(route, direction, map, opacity, weight)
@@ -451,17 +459,39 @@ html,body,all
        }
     }
 
-
-    function draw_route(map, route) {
-
+    function undraw_route(map, route) {
+      for (direction in routes[route].path_lines) {
+        for (line_no in routes[route].path_lines[direction]) {
+          pline = routes[route].path_lines[direction][line_no];
+          pline.setMap(null);
+          delete routes[route].path_lines[direction][line_no];
+        }
+        delete routes[route].path_lines[direction];
+      }
+      delete routes[route].path_lines;
+      delete routes[route].path_cache;
+      for (bus_no in routes[route].buses) {
+        routes[route].buses[bus_no].setMap(null);
+        delete routes[route].buses[bus_no];
+      }
+      delete routes[route].buses;
+      for (stop_no in routes[route].stops) {
+        routes[route].stops[stop_no].setMap(null);
+        delete routes[route].stops[stop_no];
+      }
+      delete routes[route].stops;
+    }
+    function draw_route(map, route, should_recenter) {
+         routes[route].path_cache = {};
+         routes[route].path_lines = {};
+         routes[route].buses = [];
+         routes[route].stops = [];
          $.getJSON('/Paths?route=' + route, function(r) {
 
             var opacity = default_path_opacity;
             var weight = 3.0;
 
             routes[route].path_cache = r.directions;
-            routes[route].path_lines = new Object();
-            routes[route].buses = new Array();
 
             for (direction in routes[route].path_cache)
             {
@@ -469,7 +499,9 @@ html,body,all
                draw_direction(route, direction, map, opacity, weight);
             }
 
-            recenter();
+            if (should_recenter) {
+              recenter();
+            }
 
 
             {% if stops %}
@@ -492,7 +524,7 @@ html,body,all
                     map: map
                  });
 
-                 stop_markers.push(smarker);
+                 routes[route].stops.push(smarker);
 
                  google.maps.event.addListener(smarker, "click", function() {
 
@@ -575,16 +607,64 @@ html,body,all
 
     }
 
-    function enable_route(route) {
-      if (route in routes) {
+    $("#route_adder").change(enable_route_from_event);
+    $("#route_deler").change(disable_route_from_event);
+                         
+    function reload_selects() {
+      $.getJSON("/Routes", function(route_names) {
+
+        $('#route_adder').find('option').remove().end().append(
+             '<option value"">Add Route</option>');
+        $('#route_deler').find('option').remove().end().append(
+             '<option value"">Remove Route</option>');
+                         
+        for (route_no in route_names) {
+           route_id = route_names[route_no][0];
+           route_displayname = route_names[route_no][1];
+
+           use_box = "#route_adder";
+           if (route_id in routes) {
+              use_box = "#route_deler";
+           }
+                         
+           $(use_box).append('<option value="' + route_id + '">' +
+                 route_displayname + '</option>');
+           }
+        }
+      );
+    }
+
+    function disable_route_from_event(event) {
+       disable_route($('#route_deler').val());
+    }
+               
+    function enable_route_from_event(event) {
+       enable_route($('#route_adder').val(), false);
+    }
+
+    function disable_route(route) {
+      if (route == undefined || !(route in routes)) {
          return;
       }
-      routes[route] = {enabled: true};
-      draw_route(map, route);
+      undraw_route(map, route);
+               
+      delete routes[route];
+      reload_selects();
+    }
+               
+    function enable_route(route, should_recenter) {
+      if (route == undefined || route in routes) {
+         return;
+      }
+
+      routes[route] = {};
+      draw_route(map, route, should_recenter);
+      plot_buses(map, routes[route].buses, route);
+      reload_selects();
     }
 
     {% for route in routes %}
-        enable_route("{{route}}");
+        enable_route("{{route}}", true);
     {% endfor %}
 
 
@@ -600,10 +680,6 @@ html,body,all
 
    }
 
-
-
-
-
 </script>
 </head>
 <body onload="initialize()">
@@ -618,11 +694,25 @@ html,body,all
   <div id="options">
 
     <form name="settings">
+      <select id="route_adder">
+         <option value="">Add (loading)</option>
+      </select>
+
+      <select id="route_deler">
+         <option value="">Remove (loading)</option>
+      </select>
+
+      &nbsp;&nbsp;&nbsp;
+
       <input type="checkbox" name="est" checked="{{est}}"> Estimate Locations &nbsp;&nbsp;&nbsp;
       <input type="checkbox" name="esth" checked="true"> Estimate Headings &nbsp;&nbsp;&nbsp;
       <input type="checkbox" name="snap" checked="{{snap}}"> Snap to Route &nbsp;&nbsp;&nbsp;
       <input type="checkbox" name="running" checked="true"> Running &nbsp;&nbsp;&nbsp;
-      <a href="/">other routes</a>
+      <a href="/">intro</a>
+
+
+
+
     </form>
 
 
