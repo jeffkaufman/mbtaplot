@@ -136,9 +136,13 @@ html,body,all
                     get_color("inactive", current_colored_path[0]),
                     default_path_opacity);
       }
-
-      color_path(route, direction, get_color("active",route), active_path_opacity);
-      current_colored_path = [route, direction];
+      if (route != null) {
+        color_path(route, direction, get_color("active",route), active_path_opacity);
+        current_colored_path = [route, direction];
+      }
+      else {
+        current_colored_path = [];
+      }
    }
 
 
@@ -373,8 +377,14 @@ html,body,all
                    title:bus_title + " (new)"
                    });
              bmarker.setMap(map);
+             google.maps.event.addListener(bmarker, "mouseover", function() {
+                color_paths(bmarker.bus_route, bmarker.bus_direction);
+             });
              google.maps.event.addListener(bmarker, "click", function() {
                 color_paths(bmarker.bus_route, bmarker.bus_direction);
+             });
+             google.maps.event.addListener(bmarker, "mouseout", function() {
+                color_paths(null,null);
              });
              return bmarker;
 
@@ -515,7 +525,7 @@ html,body,all
 
                  var smarker = new google.maps.Marker({
                     position: slatlng,
-                    title: stop.title,
+                    title: "click for times at " + stop.title,
                     titles: [],
                     stop_tag: stop.tag,
                     stop_tags: [stop.tag],
