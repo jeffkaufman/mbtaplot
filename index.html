@@ -42,6 +42,10 @@ html,body,all
    //  buses[]
    var routes = new Object();
 
+   times_info_window = new google.maps.InfoWindow({
+     content: "not set yet"
+   });
+
 
    var image_cache = new Object(); // heading -> marker
 
@@ -127,6 +131,43 @@ html,body,all
      return route == "Red" || route == "Blue" || route == "Orange";
    }
 
+   var bus_times_markers = [];
+   var cur_bus_times_info = {};
+   function draw_bus_times(route, bus_id, map) {
+     /* remove previous markers if any */
+     while (bus_times_markers.length > 0) {
+        bus_times_markers.pop().setMap(null);
+     }
+
+     cur_bus_times_info = {route: route, bus_id: bus_id, map: map};
+
+     /* write new markers */
+     $.getJSON('/Buses?route=' + route + '&bus_id=' + bus_id, function(buses) {
+
+        /* don't update if they've asked for something else in the mean time */
+        if (route != cur_bus_times_info.route ||
+            bus_id !=  cur_bus_times_info.bus_id) {
+          return;
+        }
+      
+        for (bus_no in buses) {
+          var up = buses[bus_no].up;
+          for (stop_tag in up) {
+             var stop_min = up[stop_tag]; 
+             if (route in routes && stop_tag in routes[route].stops) {
+                var smarker = routes[route].stops[stop_tag];
+                var btmarker = new google.maps.Marker({
+                   position: smarker.position,
+                   icon: load_time_image(stop_min),
+                   map: map});
+                btmarker.setZIndex(1000);
+                bus_times_markers.push(btmarker);
+             }
+          }
+        }
+     });
+   }
+
    function color_paths(route, direction)
    {
       if (current_colored_path)
@@ -168,8 +209,17 @@ html,body,all
 
 
 
-
-
+   function load_time_image(nmin) {
+     if (image_cache["min" + nmin] == null) {
+        image_cache["min" + nmin] = new google.maps.MarkerImage(
+           "static/min" + nmin + ".png",
+           new google.maps.Size(48, 15), // size
+           new google.maps.Point(0, 0), // origin
+           new google.maps.Point(18, 18) //anchor
+        );
+     }
+     return image_cache["min" + nmin];
+   }
 
    var stop_image = new google.maps.MarkerImage(
        "static/rmark.png",
@@ -182,7 +232,7 @@ html,body,all
       return (new Date()).getTime()/1000;
    }
 
-   function load_image(heading) {
+   function load_heading_image(heading) {
       if (image_cache[heading] == null) {
          image_cache[heading] = new google.maps.MarkerImage(
             "http://www.google.com/intl/en_ALL/mapfiles/dir_" + heading + ".png",
@@ -326,7 +376,6 @@ html,body,all
        return [lat, lon]
     }
 
-
     function plot_buses(map, busarr, route) {
 
        if (!(route in routes) || !("bus_cache" in routes[route])) {
@@ -370,18 +419,20 @@ html,body,all
 
           var blatlng = new google.maps.LatLng(lat_lon[0], lat_lon[1]);
 
-          function make_marker()
+          function make_marker(bus_id)
           {
              var bmarker = new google.maps.Marker({
                    position: blatlng,
-                   title:bus_title + " (new)"
+                   bus_id: bus_id,
+                   title:bus_title + " (new)",
                    });
+             bmarker.setZIndex(999);
              bmarker.setMap(map);
              google.maps.event.addListener(bmarker, "mouseover", function() {
                 color_paths(bmarker.bus_route, bmarker.bus_direction);
              });
              google.maps.event.addListener(bmarker, "click", function() {
-                color_paths(bmarker.bus_route, bmarker.bus_direction);
+                 draw_bus_times(route, bmarker.bus_id, map);
              });
              google.maps.event.addListener(bmarker, "mouseout", function() {
                 color_paths(null,null);
@@ -391,10 +442,10 @@ html,body,all
           }
 
           if (!(busid in busarr)) {
-             busarr[busid] = make_marker();
+             busarr[busid] = make_marker(bus.id);
           }
 
-          busarr[busid].setIcon(load_image(bus.rhead));
+          busarr[busid].setIcon(load_heading_image(bus.rhead));
           busarr[busid].setPosition(blatlng);
           busarr[busid].setTitle(bus_title);
           busarr[busid].bus_route = route;
@@ -428,6 +479,15 @@ html,body,all
         }
     }
 
+    function update_bus_times_continual() {
+       if (document.settings.running.checked) {
+          if (cur_bus_times_info != {}) {
+             draw_bus_times(cur_bus_times_info.route,
+                            cur_bus_times_info.bus_id,
+                            cur_bus_times_info.map);
+          }
+       }
+    }
 
     function draw_buses_continual(map) {
       update_continual();
@@ -439,6 +499,8 @@ html,body,all
                   5*60*1000);
 
       setInterval( update_continual, 15000);
+
+      setInterval( update_bus_times_continual, 47001 );
     }
 
     function draw_direction(route, direction, map, opacity, weight)
@@ -495,7 +557,7 @@ html,body,all
          routes[route].path_cache = {};
          routes[route].path_lines = {};
          routes[route].buses = [];
-         routes[route].stops = [];
+         routes[route].stops = {};
          $.getJSON('/Paths?route=' + route, function(r) {
 
             var opacity = default_path_opacity;
@@ -515,10 +577,6 @@ html,body,all
 
 
             {% if stops %}
-              stop_info_window = new google.maps.InfoWindow({
-                    content: "not set yet"
-              });
-
               function plot_stop(stop)
               {
                  var slatlng = new google.maps.LatLng(stop.lat, stop.lon);
@@ -534,7 +592,7 @@ html,body,all
                     map: map
                  });
 
-                 routes[route].stops.push(smarker);
+                 routes[route].stops[stop.tag] = smarker;
 
                  google.maps.event.addListener(smarker, "click", function() {
 
@@ -549,8 +607,8 @@ html,body,all
 
                     t += "<table border=\"0\">";
 
-                    stop_info_window.setContent(t + "<tr><td><tt>[loading ...]</tt></table>");
-                    stop_info_window.open(map,smarker);
+                    times_info_window.setContent(t + "<tr><td><tt>[loading ...]</tt></table>");
+                    times_info_window.open(map,smarker);
 
                     function update_arrivals(arrival_info) {
 
@@ -592,8 +650,8 @@ html,body,all
                             temp_t += "<tr><td>Stop " + errors[error_no][0] + ":<td>" + errors[error_no][1];
                          }
 
-                         stop_info_window.setContent(temp_t + "</table>");
-                         stop_info_window.open(map,smarker);
+                         times_info_window.setContent(temp_t + "</table>");
+                         times_info_window.open(map,smarker);
                     }
 
                     for (tag_no in smarker.stop_tags) {

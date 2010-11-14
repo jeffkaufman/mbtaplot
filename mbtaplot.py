@@ -138,13 +138,17 @@ class Bus(object):
         self.pred_lat = self.lat
         self.pred_lon = self.lon
 
+        self.upcoming_stops = []
+
         self.type ="bus"
 
 
     @staticmethod
     def make_subway(trip, line,
                     wait_i, stop_i, direction_i,
-                    wait_j, stop_j, direction_j):
+                    wait_j, stop_j, direction_j,
+                    upcoming):
+
         s = Bus(None)
         s.lat, s.lon = subway_station_loc(line, stop_i)
         s.pred_lat, s.pred_lon = subway_station_loc(line, stop_j)
@@ -156,6 +160,8 @@ class Bus(object):
         s.id = trip
         s.routeTag = line
 
+        s.upcoming_stops = upcoming
+
         s.type = "subway"
 
         return s
@@ -163,18 +169,21 @@ class Bus(object):
 
     @property
     def age(self):
-        return time.time() - self.t
+        return int(time.time() - self.t)
 
     @property
     def predAge(self):
-        return time.time() - self.pred_t
+        return int(time.time() - self.pred_t)
 
     @property
     def round_heading(self):
         return (int(int(self.heading)/3)*3)%120
 
-    def sendable(self):
-        return {
+    def time_to_min(self, t):
+        return int((t-time.time())/60)
+
+    def sendable(self, upcoming=False):
+        tr = {
             "lat_i": self.pred_lat,
             "lon_i": self.pred_lon,
             "lat_j": self.lat,
@@ -185,6 +194,26 @@ class Bus(object):
             "age_j": int(self.age+.5),
             "rhead": self.round_heading,
             }
+
+        if upcoming:
+            tr["up"] = {}
+
+            if self.type == "bus":
+                prev = -100
+                for (t,s,d) in sorted(self.upcoming_stops):
+                    if d != self.dirTag:
+                        break                
+
+                    t = self.time_to_min(t)
+                    if 0 <= t < 200 and t-prev >= 2:
+                        tr["up"][s] = t
+                        prev = t
+            else: # subway
+                for t,s in self.upcoming_stops:
+                    if t > 0:
+                        tr["up"][s] = int(t/60)
+
+        return tr
 
 
 class SubStop(object):
@@ -262,7 +291,8 @@ def distance(x1,y1,x2,y2):
 def request_predictions(route_num, bus_hash):
     paths, directions, stops = request_paths(route_num)
 
-    vehicle_predictions = {}
+    vehicle_predictions = {} # bus_id -> best_time
+    full_vehicle_predictions = {} # bus_id -> [(stop_id, time)]
 
     def updatePredictions(xmldoc, doc_age):
         for predictions in xmldoc.getElementsByTagName("predictions"):
@@ -272,6 +302,10 @@ def request_predictions(route_num, bus_hash):
                 vehicle = prediction.getAttribute("vehicle")
                 if vehicle not in bus_hash:
                     continue
+
+                if vehicle not in full_vehicle_predictions:
+                    full_vehicle_predictions[vehicle] = []
+                full_vehicle_predictions[vehicle].append((stop.tag, prediction.getAttribute("dirTag"), minutes))
 
                 if minutes < 2:
                     continue
@@ -311,7 +345,7 @@ def request_predictions(route_num, bus_hash):
     if cur_stops:
         predict_some_stops(cur_stops)
 
-    return vehicle_predictions
+    return vehicle_predictions, full_vehicle_predictions
 
 
 def request_buses(route_num):
@@ -339,11 +373,18 @@ def request_buses(route_num):
 
 
 def update_predictions(route_num, bus_hash):
-    for bus_id, prediction in request_predictions(route_num, bus_hash).items():
+    def to_time(m):
+        return int(time.time()+int(m)*60+30)
+
+    vehicle_predictions, full_vehicle_predictions = request_predictions(route_num, bus_hash)
+    for bus_id, prediction in vehicle_predictions.items():
         minutes, stop_lat, stop_lon = prediction
-        bus_hash[bus_id].pred_t = time.time()+minutes*60+30
+        bus_hash[bus_id].pred_t = to_time(minutes)
         bus_hash[bus_id].pred_lat = stop_lat
         bus_hash[bus_id].pred_lon = stop_lon
+        bus_hash[bus_id].upcoming_stops = [(to_time(m), s, dt) 
+                                           for (s, dt, m) 
+                                           in full_vehicle_predictions[bus_id]]
 
 
 def allRoutes():
@@ -485,6 +526,7 @@ class Paths(webapp.RequestHandler):
         self.response.out.write(self.cache[route])
 
 
+
 class Arrivals(webapp.RequestHandler):
     def get(self):
         stop = cgi.escape(self.request.get('stop'))
@@ -606,8 +648,8 @@ def request_subways(route):
 
         subways[trip] = Bus.make_subway(trip, route,
                                         wait_i, stop_i, direction_i,
-                                        wait_j, stop_j, direction_j)
-
+                                        wait_j, stop_j, direction_j,
+                                        [(wait_n, stop_n) for (wait_n, stop_n, dir_n) in stop_info])
     return subways
 
 
@@ -631,21 +673,25 @@ class Buses(webapp.RequestHandler):
 
     def get(self):
         route = cgi.escape(self.request.get('route'))
+        bus_id = cgi.escape(self.request.get('bus_id'))
 
         now = time.time()
         if now - self.timestamp(route) > self.max_refresh or is_subway(route):
             """ refresh buses from server every Nsec; subway caching is done in get_text """
 
             if is_subway(route):
-                subways =request_subways(route)
+                subways = request_subways(route)
                 self.cache[route] = now, subways
             else:
                 buses = request_buses(route)
                 self.cache[route] = now, buses
                 update_predictions(route, buses)
 
-        self.response.out.write(json.dumps(
-                [bus.sendable() for bus in self.buses(route).values()]))
+        if bus_id:
+            self.response.out.write(json.dumps([self.buses(route)[bus_id].sendable(upcoming=True)]))
+        else:
+            self.response.out.write(json.dumps(
+                    [bus.sendable() for bus in self.buses(route).values()]))
 
 class Subways(webapp.RequestHandler):
     def get(self):
