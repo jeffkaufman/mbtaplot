@@ -160,7 +160,7 @@ html,body,all
                    position: smarker.position,
                    icon: load_time_image(stop_min),
                    map: map});
-                btmarker.setZIndex(1000);
+                btmarker.setZIndex(1200-stop_min);
                 bus_times_markers.push(btmarker);
              }
           }
@@ -213,9 +213,9 @@ html,body,all
      if (image_cache["min" + nmin] == null) {
         image_cache["min" + nmin] = new google.maps.MarkerImage(
            "static/min" + nmin + ".png",
-           new google.maps.Size(48, 15), // size
+           new google.maps.Size(78, 42), // size
            new google.maps.Point(0, 0), // origin
-           new google.maps.Point(18, 18) //anchor
+           new google.maps.Point(0, 42) //anchor
         );
      }
      return image_cache["min" + nmin];
