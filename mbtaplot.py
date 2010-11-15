@@ -38,7 +38,7 @@ def get_xml(use_url, refresh=10):
 
 def get_text(use_url, refresh, isxml=False,
              headers={"Cache-Control": "no-cache,max-age=0",
-                      "Pragma": "no-cache"}
+                      "Pragma": "no-cache"},
              cache=memcache.Client()):
     """
     Request data from a url with caching and possibly with xml parsing
@@ -415,6 +415,7 @@ def request_buses(route_num):
 
 
     for vehicle in xmldoc.getElementsByTagName("vehicle"):
+        bus = Vehicle.make_bus(vehicle)
         bus_hash[bus.id] = Vehicle.make_bus(vehicle)
 
     return bus_hash
