@@ -89,10 +89,6 @@ def get_text(use_url, refresh, isxml=False,
     else:
         raise FailedFetchException("Failed to Fetch %s and didn't have it cached" % use_url)
 
-class DebugText(webapp.RequestHandler):
-    def get(self):
-        self.response.out.write(get_text('http://developer.mbta.com/Data/Red.txt',refresh=2)[0].replace("\n","<br>"))
-
 short_names = {"Line": "SLM",
                "701": "CT1",
                "747": "CT2S",
@@ -776,7 +772,6 @@ application = webapp.WSGIApplication([('/', MainPage),
                                       ('/Buses', Buses),
                                       ('/Routes', Routes),
                                       ('/Arrivals', Arrivals),
-                                      ('/DebugText', DebugText),
                                      ], debug=True)
 
 def main():
