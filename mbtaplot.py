@@ -36,7 +36,32 @@ class InvalidRouteException(Exception):
 class InvalidStopException(Exception):
     pass
 
-def get_text(use_url,refresh,isxml=False,cache=memcache.Client()):
+def get_text(use_url, refresh, isxml=False,
+             headers={"Cache-Control": "no-cache,max-age=0",
+                      "Pragma": "no-cache"}
+             cache=memcache.Client()):
+    """
+    Request data from a url with caching and possibly with xml parsing
+    
+    Options:
+
+       refresh: how many seconds to go between cach refreshes
+        - use 0 to disable caching
+        
+       isxml: set to true if we should parse the result
+
+       headers: what headers to use for the request.
+        - by default we just disable caching by intermediate services
+
+       cache: python mutable default args trickery / don't set this
+
+    If the fetch fails we return the cached value even if it's too old.
+    If we don't have a cached value we raise a FailedFetchException
+
+    Cachine uses memcache.
+    """
+
+
     cached_val = cache.get(use_url)
     if cached_val:
         result_age, result_val = cached_val
@@ -46,8 +71,7 @@ def get_text(use_url,refresh,isxml=False,cache=memcache.Client()):
     if not result_val or time.time()-result_age > refresh:
         logging.info("fetch %s" % use_url)
         result = urlfetch.fetch(url=use_url,
-                                headers={"Cache-Control": "no-cache,max-age=0",
-                                         "Pragma": "no-cache"})
+                                headers=headers)
         if result.status_code == 200:
             result_val = result.content
             result_age = time.time()
