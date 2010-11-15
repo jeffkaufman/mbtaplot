@@ -22,11 +22,6 @@ SUBWAY_KEY="http://developer.mbta.com/RT_Archive/RealTimeHeavyRailKeys.csv"
 def is_subway(route):
     return route in('Red', 'Orange', 'Blue')
 
-def get_xml(use_url, refresh=10):
-    """ only update every /refresh/ seconds """
-
-    return get_text(use_url,refresh=refresh,isxml=True)
-
 class FailedFetchException(Exception):
     pass
 
@@ -35,6 +30,11 @@ class InvalidRouteException(Exception):
 
 class InvalidStopException(Exception):
     pass
+
+def get_xml(use_url, refresh=10):
+    """ get xml from url, only updating every /refresh/ seconds """
+
+    return get_text(use_url,refresh=refresh,isxml=True)
 
 def get_text(use_url, refresh, isxml=False,
              headers={"Cache-Control": "no-cache,max-age=0",
@@ -89,16 +89,21 @@ def get_text(use_url, refresh, isxml=False,
     else:
         raise FailedFetchException("Failed to Fetch %s and didn't have it cached" % use_url)
 
-short_names = {"Line": "SLM",
-               "701": "CT1",
-               "747": "CT2S",
-               "748": "CT2N",
-               "708" : "CT3",
-               "CT2-South": "CT2S",
-               "CT2-North": "CT2N",
-               }
 
-def short_name(x):
+def short_name(x, 
+               short_names = {"Line": "SLM",
+                              "701": "CT1",
+                              "747": "CT2S",
+                              "748": "CT2N",
+                              "708" : "CT3",
+                              "CT2-South": "CT2S",
+                              "CT2-North": "CT2N",
+                              }
+               ):
+    """ For some bus routes the route name has numbers where short
+    names are usually used.  For example, 701 for CT1.  Here we
+    correct for this. """
+
     x = str(x).split()[-1]
     return short_names.get(x,x)
 
