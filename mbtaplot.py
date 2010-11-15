@@ -110,20 +110,30 @@ def short_name(x,
 
 
 class Vehicle(object):
+
+    """ Represents a bus or a subway car
+
+    Knows where it was at one time (t, lat, lon) and where it ought to be
+    at another time (pred_t, pred_lat, pred_lon)
+
+    """
+
     def __init__(self, t, lat, lon, id, dirTag, type, heading=0, preds=None, upcoming_stops=None):
         """ use either make_subway or make_bus instead """
 
         self.t = t
-        self.lat = float(lat)
-        self.lon = float(lon)
+
+        # location at time t
+        self.lat, self.lon = float(lat), float(lon)
+
+        # predicted location at time pred_t
+        if preds is None: # if we don't have predictions yet, just use the current info
+            preds = self.t, self.lat, self.lon
+        self.pred_t, self.pred_lat, self.pred_lon = preds
+
         self.id = id
         self.heading = int(heading)
         self.dirTag = dirTag
-
-        # if we don't have predictions yet, just use the current info
-        if preds is None:
-            preds = self.t, self.lat, self.lon
-        self.pred_t, self.pred_lat, self.pred_lon = preds
 
         if upcoming_stops is None:
             upcoming_stops = []
@@ -172,14 +182,23 @@ class Vehicle(object):
 
     @property
     def round_heading(self):
+        """ heading needs to be between 0 and 117 and be divisible by
+        3 in order to use the current bus icons we're using
+        """
         return (int(int(self.heading)/3)*3)%120
 
     def time_to_min(self, t):
+        """ convert a time to a number of minutes in the future """
         if t-time.time() < 0:
             return -1
         return int((t-time.time())/60)
 
     def sendable(self, upcoming=False):
+        """ a dictionary representing this bus
+        
+        if upcoming, include stop predictions
+        """
+
         tr = {
             "lat_i": self.pred_lat,
             "lon_i": self.pred_lon,
@@ -227,6 +246,9 @@ class Vehicle(object):
 
 
 class SubStop(object):
+    """ a subway stop. """
+
+
     def __init__(self, strstop):
         self.route, self.stop,_,_,_,_,_,self.branch,_,_,_,self.stop_desc,_,self.lat,self.lon = strstop.strip().split(',')
         self.lat, self.lon = float(self.lat), float(self.lon)
@@ -270,11 +292,16 @@ class SubStop(object):
     def loc(self):
         return self.lat, self.lon
 
+    def ashmont_stop(self):
+        return self.branch == "Ashmont"
 
-def request_subpaths(routes={}):
-    """ like request_paths but for subways, all routes at once"""
 
-    if not routes:
+
+
+def request_subpaths(routes_cache={}):
+    """ like request_paths but for subways, all routes at once (cached forever) """
+
+    if not routes_cache:
         for x in get_text(SUBWAY_KEY,refresh=60*60*12)[0].split("\n"):
             if x.startswith("Line,"):
                 continue
@@ -283,14 +310,12 @@ def request_subpaths(routes={}):
             except ValueError:
                 continue
 
-            if substop.route not in routes:
-                routes[substop.route] = []
+            if substop.route not in routes_cache:
+                routes_cache[substop.route] = []
 
-            routes[substop.route].append(substop)
+            routes_cache[substop.route].append(substop)
 
-    return routes
-
-
+    return routes_cache
 
 
 
@@ -335,6 +360,10 @@ def request_paths(route_num, path_cache={}):
     return path_cache[route_num]
 
 def distance(x1,y1,x2,y2):
+    """ technically, euclidian distance is wrong when used on lat/lon.
+    For an area as small as the boston area it should be pretty good,
+    though """
+
     return (x1-x2)*(x1-x2) + (y1-y2)*(y1-y2)
 
 def request_predictions(route_num, bus_hash):
@@ -504,13 +533,6 @@ class Direction(object):
         self.stops = [stops[s.getAttribute("tag")]
                       for s in xml_direction.getElementsByTagName("stop")]
 
-def is_ashmont_stop(stop, astops=[]):
-    if not astops:
-        for substop in request_subpaths()["Red"]:
-            if substop.branch == "Ashmont":
-                astops.append(substop.stop)
-    return stop in astops
-
 class Paths(webapp.RequestHandler):
     cache = {}
 
@@ -617,6 +639,8 @@ class Routes(webapp.RequestHandler):
         self.response.out.write(json.dumps(allRoutes()))
 
 def request_subways_literal(line):
+    """ request current subway info, don't do much processing """
+
     tz_boston = dateutil.tz.tzstr('EST5EDT')
 
     use_url = SUBWAY_FEED_DIR + line + ".txt"
@@ -671,7 +695,7 @@ def request_subways_literal(line):
 
 def visited_ashmont_stop(stop_info):
     for wait, stop, direction in stop_info:
-        if is_ashmont_stop(stop):
+        if SubStop.get_for(stop).ashmont_stop():
             return True
     return False
 
