@@ -107,90 +107,60 @@ def short_name(x,
     x = str(x).split()[-1]
     return short_names.get(x,x)
 
-def get_substop_arrivals(stop):
-    substop = get_substop_info(stop)
-    trips = []
 
-    for route in request_subpaths():
-        for trip, stop_info in request_subways_literal(route).items():
-            stop_info.sort()
-            for wait, stopn, direction in stop_info:
-                if stopn == stop:
-                    last_stop_wait, last_stop, last_stop_direction = stop_info[-1]
-                    substop_target = get_substop_info(last_stop)
-                    stop_desc_target = substop_target.stop_desc
-                    stop_desc_target = stop_desc_target.replace(" Station","")
-                    if wait < 0:
-                        continue
-                    trips.append((wait/60, route + " Line", stop_desc_target))
-    return trips
 
-def get_substop_info(stop):
-    subpaths = request_subpaths()
-    for route, substops in subpaths.items():
-        for substop in substops:
-            if substop.stop == stop:
-                return substop
-    raise InvalidStopException("unknown stop %s" % stop)
+class Vehicle(object):
+    def __init__(self, t, lat, lon, id, dirTag, type, heading=0, preds=None, upcoming_stops=None):
+        """ use either make_subway or make_bus instead """
 
-def subway_station_loc(route, stop):
-    subpaths = request_subpaths()
-    try:
-        substops = subpaths[route]
-    except ValueError:
-        raise InvalidRouteException("%s not found" % route)
+        self.t = t
+        self.lat = float(lat)
+        self.lon = float(lon)
+        self.id = id
+        self.heading = int(heading)
+        self.dirTag = dirTag
 
-    for substop in substops:
-        if substop.stop == stop:
-            return substop.lat, substop.lon
+        # if we don't have predictions yet, just use the current info
+        if preds is None:
+            preds = self.t, self.lat, self.lon
+        self.pred_t, self.pred_lat, self.pred_lon = preds
 
-    raise InvalidStopException("%s.%s not found" % (route, stop))
+        if upcoming_stops is None:
+            upcoming_stops = []
+        self.upcoming_stops = upcoming_stops
 
-class Bus(object):
-    def __init__(self, xml_vehicle):
-        if not xml_vehicle:
-            return
+        self.type = type
 
-        for attribute in ("dirTag", "heading", "id", "lat", "lon", "routeTag", "secsSinceReport"):
-            setattr(self, attribute, xml_vehicle.getAttribute(attribute))
-        self.t = time.time() - int(self.secsSinceReport)
-        del self.secsSinceReport
+    @staticmethod
+    def make_bus(xml_vehicle):
+        def ga(a):
+            return xml_vehicle.getAttribute(a)
 
-        self.lat = float(self.lat)
-        self.lon = float(self.lon)
-
-        self.pred_t = self.t
-        self.pred_lat = self.lat
-        self.pred_lon = self.lon
-
-        self.upcoming_stops = []
-
-        self.type ="bus"
-
+        return Vehicle(t=time.time() - int(ga("secsSinceReport")),
+                       lat=ga("lat"),
+                       lon=ga("lon"),
+                       id=ga("id"),
+                       dirTag=ga("dirTag"),
+                       heading=ga("heading"),
+                       type="bus")
 
     @staticmethod
     def make_subway(trip, line,
                     wait_i, stop_i, direction_i,
                     wait_j, stop_j, direction_j,
                     upcoming):
-
-        s = Bus(None)
-        s.lat, s.lon = subway_station_loc(line, stop_i)
-        s.pred_lat, s.pred_lon = subway_station_loc(line, stop_j)
+        lat, lon = SubStop.get_for(stop_i).loc()
+        pred_lat, pred_lon = SubStop.get_for(stop_j).loc()
         now = time.time()
-        s.t = now+wait_i
-        s.pred_t = now+wait_j
-        s.dirTag = direction_i
-        s.heading = 0
-        s.id = trip
-        s.routeTag = line
+        t = now+wait_i
+        pred_t = now+wait_j
 
-        s.upcoming_stops = upcoming
-
-        s.type = "subway"
-
-        return s
-
+        return Vehicle(t=t, lat=lat, lon=lon,
+                       preds=(pred_t, pred_lat, pred_lon),
+                       id=trip,
+                       dirTag=direction_i,
+                       upcoming_stops=upcoming,
+                       type="subway")
 
     @property
     def age(self):
@@ -230,16 +200,24 @@ class Bus(object):
                 prev = -100
                 for (t,s,d) in sorted(self.upcoming_stops):
                     nt = self.time_to_min(t)
+
+                    # don't predict the past
                     if nt < 0:
                         continue                    
 
+                    # predictions for when the bus turns around or
+                    # otherwise changes route shouldn't be displayed
                     if d != self.dirTag:
                         break                
 
+                    if (nt < 200 # we only have icons for the next 200 min
+                        and
+                        nt-prev >= 2 # don't show bus stops closer together than 2min
+                        ):
 
-                    if nt < 200 and nt-prev >= 2:
                         tr["up"][s] = nt #, int(t-time.time())
                         prev = nt
+
             else: # subway
                 for t,s in self.upcoming_stops:
                     if t > 0:
@@ -252,6 +230,45 @@ class SubStop(object):
     def __init__(self, strstop):
         self.route, self.stop,_,_,_,_,_,self.branch,_,_,_,self.stop_desc,_,self.lat,self.lon = strstop.strip().split(',')
         self.lat, self.lon = float(self.lat), float(self.lon)
+
+    @staticmethod
+    def get_for(stop):
+        """ get the SubStop object for a stop """
+
+        subpaths = request_subpaths()
+        for route, substops in subpaths.items():
+            for substop in substops:
+                if substop.stop == stop:
+                    return substop
+        raise InvalidStopException("unknown stop %s" % stop)
+
+    def arrivals(self):
+        """
+        Determine all predicted arrivals here.
+        
+        Returns [(wait (4: in minutes),
+                  route (Red Line),
+                  headsign (stop description of trips's last stop: Ashmont / Braintree)), ...]
+        
+        Sorted, with earlier arrivals sooner in the list.      
+        """
+
+        trips = []
+
+        for trip, stop_info in request_subways_literal(self.route).items():
+            for wait, stop, direction in stop_info:
+                if wait < 0:
+                    continue
+
+                if stop == self.stop:
+                    _, last_stop, _ = stop_info[-1]
+                    headsign = SubStop.get_for(last_stop).stop_desc.replace(" Station","")
+                    trips.append((wait/60, self.route + " Line", headsign))
+
+        return trips
+
+    def loc(self):
+        return self.lat, self.lon
 
 
 def request_subpaths(routes={}):
@@ -398,8 +415,7 @@ def request_buses(route_num):
 
 
     for vehicle in xmldoc.getElementsByTagName("vehicle"):
-        bus = Bus(vehicle)
-        bus_hash[bus.id] = bus
+        bus_hash[bus.id] = Vehicle.make_bus(vehicle)
 
     return bus_hash
 
@@ -565,7 +581,7 @@ class Arrivals(webapp.RequestHandler):
 
         if stop.isalpha():
             try:
-                p = get_substop_arrivals(stop)
+                p = SubStop.get_for(stop).arrivals()
             except (InvalidRouteException, InvalidStopException):
                 self.response.out.write(json.dumps(["error", []]))
                 return
@@ -678,10 +694,10 @@ def request_subways(route):
             else:
                 direction_i = direction_i = "0" # mark as braintree
 
-        subways[trip] = Bus.make_subway(trip, route,
-                                        wait_i, stop_i, direction_i,
-                                        wait_j, stop_j, direction_j,
-                                        [(wait_n, stop_n) for (wait_n, stop_n, dir_n) in stop_info])
+        subways[trip] = Vehicle.make_subway(trip, route,
+                                            wait_i, stop_i, direction_i,
+                                            wait_j, stop_j, direction_j,
+                                            [(wait_n, stop_n) for (wait_n, stop_n, dir_n) in stop_info])
     return subways
 
 
