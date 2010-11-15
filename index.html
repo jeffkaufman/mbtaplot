@@ -139,6 +139,11 @@ html,body,all
         bus_times_markers.pop().setMap(null);
      }
 
+     if (route == null) {
+        cur_bus_times_info = {};
+        return;
+     }
+
      cur_bus_times_info = {route: route, bus_id: bus_id, map: map};
 
      /* write new markers */
@@ -432,6 +437,7 @@ html,body,all
                 color_paths(bmarker.bus_route, bmarker.bus_direction);
              });
              google.maps.event.addListener(bmarker, "click", function() {
+                 times_info_window.close(); 
                  draw_bus_times(route, bmarker.bus_id, map);
              });
              google.maps.event.addListener(bmarker, "mouseout", function() {
@@ -595,6 +601,7 @@ html,body,all
                  routes[route].stops[stop.tag] = smarker;
 
                  google.maps.event.addListener(smarker, "click", function() {
+                    draw_bus_times(null, null, null); // hide bus time markers
 
                     t = "<h3>" + stop.title;
                     for (title_no in smarker.titles) {
