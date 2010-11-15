@@ -169,17 +169,19 @@ class Bus(object):
 
     @property
     def age(self):
-        return int(time.time() - self.t)
+        return int(time.time() - self.t + .5)
 
     @property
     def predAge(self):
-        return int(time.time() - self.pred_t)
+        return int(time.time() - self.pred_t + .5)
 
     @property
     def round_heading(self):
         return (int(int(self.heading)/3)*3)%120
 
     def time_to_min(self, t):
+        if t-time.time() < 0:
+            return -1
         return int((t-time.time())/60)
 
     def sendable(self, upcoming=False):
@@ -190,8 +192,8 @@ class Bus(object):
             "lon_j": self.lon,
             "id": self.id,
             "dir": self.dirTag,
-            "age_i": int(self.predAge+.5),
-            "age_j": int(self.age+.5),
+            "age_i": self.predAge,
+            "age_j": self.age,
             "rhead": self.round_heading,
             }
 
@@ -199,15 +201,20 @@ class Bus(object):
             tr["up"] = {}
 
             if self.type == "bus":
+
                 prev = -100
                 for (t,s,d) in sorted(self.upcoming_stops):
+                    nt = self.time_to_min(t)
+                    if nt < 0:
+                        continue                    
+
                     if d != self.dirTag:
                         break                
 
-                    t = self.time_to_min(t)
-                    if 0 <= t < 200 and t-prev >= 2:
-                        tr["up"][s] = t
-                        prev = t
+
+                    if nt < 200 and nt-prev >= 2:
+                        tr["up"][s] = nt #, int(t-time.time())
+                        prev = nt
             else: # subway
                 for t,s in self.upcoming_stops:
                     if t > 0:
@@ -298,28 +305,28 @@ def request_predictions(route_num, bus_hash):
         for predictions in xmldoc.getElementsByTagName("predictions"):
             stop = stops[predictions.getAttribute("stopTag")]
             for prediction in predictions.getElementsByTagName("prediction"):
-                minutes = int(prediction.getAttribute("minutes")) - int(doc_age/60)
+                seconds = 60*int(prediction.getAttribute("minutes")) - doc_age
                 vehicle = prediction.getAttribute("vehicle")
                 if vehicle not in bus_hash:
                     continue
 
                 if vehicle not in full_vehicle_predictions:
                     full_vehicle_predictions[vehicle] = []
-                full_vehicle_predictions[vehicle].append((stop.tag, prediction.getAttribute("dirTag"), minutes))
+                full_vehicle_predictions[vehicle].append((stop.tag, prediction.getAttribute("dirTag"), seconds))
 
-                if minutes < 2:
+                if seconds < 60*2:
                     continue
 
-                if vehicle not in vehicle_predictions or minutes < vehicle_predictions[vehicle][0]:
-                    vehicle_predictions[vehicle] = minutes, stop.lat, stop.lon
-                elif minutes == vehicle_predictions[vehicle][0]:
+                if vehicle not in vehicle_predictions or seconds < vehicle_predictions[vehicle][0]:
+                    vehicle_predictions[vehicle] = seconds, stop.lat, stop.lon
+                elif seconds == vehicle_predictions[vehicle][0]:
                     c_lat = bus_hash[vehicle].lat
                     c_lon = bus_hash[vehicle].lon
 
-                    o_minutes, o_lat, o_lon = vehicle_predictions[vehicle]
+                    o_seconds, o_lat, o_lon = vehicle_predictions[vehicle]
 
                     if distance(c_lat, c_lon, stop.lat, stop.lon) < distance(c_lat, c_lon, o_lat, o_lon):
-                        vehicle_predictions[vehicle] = minutes, stop.lat, stop.lon
+                        vehicle_predictions[vehicle] = seconds, stop.lat, stop.lon
 
     def predict_some_stops(stop_list):
         use_url = BUS_FEED + "&".join(("command=predictionsForMultiStops", "a=mbta", ))
@@ -373,17 +380,17 @@ def request_buses(route_num):
 
 
 def update_predictions(route_num, bus_hash):
-    def to_time(m):
-        return int(time.time()+int(m)*60+30)
+    def to_time(secs):
+        return int(time.time()+secs)
 
     vehicle_predictions, full_vehicle_predictions = request_predictions(route_num, bus_hash)
     for bus_id, prediction in vehicle_predictions.items():
-        minutes, stop_lat, stop_lon = prediction
-        bus_hash[bus_id].pred_t = to_time(minutes)
+        secs, stop_lat, stop_lon = prediction
+        bus_hash[bus_id].pred_t = to_time(secs)
         bus_hash[bus_id].pred_lat = stop_lat
         bus_hash[bus_id].pred_lon = stop_lon
-        bus_hash[bus_id].upcoming_stops = [(to_time(m), s, dt) 
-                                           for (s, dt, m) 
+        bus_hash[bus_id].upcoming_stops = [(to_time(secs), s, dt) 
+                                           for (s, dt, secs) 
                                            in full_vehicle_predictions[bus_id]]
 
 
