@@ -182,10 +182,10 @@ class Vehicle(object):
 
     @property
     def round_heading(self):
-        """ heading needs to be between 0 and 117 and be divisible by
-        3 in order to use the current bus icons we're using
+        """ heading needs to be divisible by 3 in order to use the
+        current bus icons we're using
         """
-        return (int(int(self.heading)/3)*3)%120
+        return (int(int(self.heading)/3)*3)
 
     def time_to_min(self, t):
         """ convert a time to a number of minutes in the future """

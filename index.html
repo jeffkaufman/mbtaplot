@@ -240,7 +240,7 @@ html,body,all
    function load_heading_image(heading) {
       if (image_cache[heading] == null) {
          image_cache[heading] = new google.maps.MarkerImage(
-            "http://www.google.com/intl/en_ALL/mapfiles/dir_" + heading + ".png",
+            "static/dir_" + heading + ".png",
             new google.maps.Size(24, 24), // size
             new google.maps.Point(0, 0), // origin
             new google.maps.Point(12, 12) //anchor
@@ -414,8 +414,8 @@ html,body,all
                 var theta_r = Math.atan2(delta_lon,delta_lat);
                 var theta_d = (180*theta_r/Math.PI+360)%360;
 
-                // round to the nearest 3 degrees in the range 0-120
-                bus.rhead = Math.round((Math.round(theta_d)%120)/3)*3;
+                // round to the nearest 3 degrees
+                bus.rhead = Math.round((Math.round(theta_d))/3)*3;
              }
              else {
                 bus.rhead = 0;
