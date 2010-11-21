@@ -45,6 +45,7 @@ html,body,all
    times_info_window = new google.maps.InfoWindow({
      content: "not set yet"
    });
+   window.times_info_window = times_info_window;
 
 
    var image_cache = new Object(); // heading -> marker
@@ -139,7 +140,7 @@ html,body,all
         bus_times_markers.pop().setMap(null);
      }
 
-     if (route == null) {
+     if (route == null || !(route in routes)) {
         cur_bus_times_info = {};
         return;
      }
@@ -650,7 +651,11 @@ html,body,all
                             if (minutes == "0") { minutes = "nowish"; }
                             else { minutes += "min" ; }
 
-                            temp_t += "<tr><td align=\"right\">" + minutes + ":</td><td>" + route + " " + title + "</td></tr>";
+                            temp_t += "<tr><td align=\"right\">" + minutes +
+                              ":</td><td><a href=\"/?route="
+                                  + route + "\" onclick=\"window.enable_route("+route+", false); window.times_info_window.close(); return false;\">"
+                                  + route + "</a> "
+                                  + title + "</td></tr>";
                          }
 
                          for (error_no in errors) {
@@ -724,6 +729,10 @@ html,body,all
                
       delete routes[route];
       reload_selects();
+
+      draw_bus_times(cur_bus_times_info.route,
+                     cur_bus_times_info.bus_id,
+                     cur_bus_times_info.map);
     }
                
     function enable_route(route, should_recenter) {
@@ -736,6 +745,8 @@ html,body,all
       plot_buses(map, routes[route].buses, route);
       reload_selects();
     }
+
+    window.enable_route = enable_route;               
 
     {% for route in routes %}
         enable_route("{{route}}", true);
