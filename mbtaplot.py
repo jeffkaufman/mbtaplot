@@ -322,7 +322,7 @@ def request_subpaths(routes_cache={}):
 def request_paths(route_num, path_cache={}):
     # path cache shared between calls
     # never updates path cache
-    # returns: paths, directions, stops
+    # returns: directions, stops
 
     if route_num not in path_cache:
         use_url = BUS_FEED + "&".join(("command=routeConfig",
@@ -353,9 +353,7 @@ def request_paths(route_num, path_cache={}):
             direction = Direction(d, stops)
             directions[direction.tag] = direction
 
-        paths = [Path(p) for p in xmldoc.getElementsByTagName("path")]
-
-        path_cache[route_num] = paths, directions, stops
+        path_cache[route_num] = directions, stops
 
     return path_cache[route_num]
 
@@ -367,7 +365,7 @@ def distance(x1,y1,x2,y2):
     return (x1-x2)*(x1-x2) + (y1-y2)*(y1-y2)
 
 def request_predictions(route_num, bus_hash):
-    paths, directions, stops = request_paths(route_num)
+    directions, stops = request_paths(route_num)
 
     vehicle_predictions = {} # bus_id -> best_time
     full_vehicle_predictions = {} # bus_id -> [(stop_id, time)]
@@ -494,24 +492,6 @@ class Path(object):
         self.points = [Point(p) for p in xml_path.getElementsByTagName("point")]
         self.tags = [tag.getAttribute("id") for tag in xml_path.getElementsByTagName("tag")]
 
-    def is_for(self, direction):
-        """ is this path one of the ones for this direction? """
-        # The format for path tags appears to be that the path tag
-        # will start with the direction tag it belongs to:
-        #
-        #    dir = 78_780004v0_1
-        #   path = 78_780004v0_130_2156_2159, 78_780004v0_110_2330_2332, ...
-        #
-        #    dir = 77_770009v0_1
-        #   path = 77_770009v0_18_2303_2305, ...
-        #
-        # I can't find this documented anywhere, so it might change.
-        # If it does, we can just return "true", and the downside will
-        # be more network traffic and busses appearing on the wrong
-        # side of divided streets like mass av
-        #
-        return any(tag.startswith(direction) for tag in self.tags)
-
     def __getitem__(self, x):
         return self.points[x]
 
@@ -538,15 +518,13 @@ class Paths(webapp.RequestHandler):
 
 
     def for_bus(self,route):
-        paths, directions, stops = request_paths(route)
+        directions, stops = request_paths(route)
 
         #path_structure = [[{"lat": point.lat, "lon": point.lon} for point in path] for path in paths]
 
         direction_structure = {}
-        for direction in directions:
-            direction_structure[direction] = [[{"lat": point.lat, "lon": point.lon} for point in path]
-                                              for path in paths
-                                              if path.is_for(direction)]
+        for direction in directions.values():
+            direction_structure[direction.tag] = [[{"lat": stop.lat, "lon": stop.lon} for stop in direction.stops]]
 
         stop_structure = [{"lat": stop.lat, "lon": stop.lon, "title" : stop.title, "tag": stop.tag}
                           for stop in stops.values()]
