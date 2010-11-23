@@ -518,8 +518,8 @@ html,body,all
           var coords = new Array();
           for (point_no in paths[path_no]) {
              var point = paths[path_no][point_no];
-             update_bounds(point.lat, point.lon)
-                coords.push( new google.maps.LatLng(point.lat, point.lon) );
+             update_bounds(point.lat, point.lon);
+             coords.push( new google.maps.LatLng(point.lat, point.lon) );
           }
 
           var buspath = new google.maps.Polyline({
@@ -530,9 +530,6 @@ html,body,all
                 });
 
           buspath.setMap(map);
-          google.maps.event.addListener(buspath, "click", function() {
-             //draw_buses(map, busarr, route);
-          });
 
           routes[route].path_lines[direction].push(buspath);
        }
