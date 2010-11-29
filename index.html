@@ -24,10 +24,61 @@ html,body,all
    clear: both;
 }
 
+/* styling for running/ not running overlay */
+.running_overlay_details {
+  position:absolute;
+  top:15px;
+  left:15px;
+  font-size:14px;
+  color:#fff;
+}
+
+.running_overlay_details h3 {
+  color:#aba;
+  font-size:15px;
+  margin:0 0 -10px 0;
+}
+
+/* the overlayed element */
+.running_overlay {
+  /* initially hidden */
+  display:none;
+
+  /* place overlay on top of other elements */
+  z-index:10000;
+
+  /* styling */
+  background-color:#333;
+
+  width:150px;
+
+  min-height:100px;
+  border:1px solid #666;
+
+  /* CSS3 styling for latest browsers */
+  -moz-box-shadow:0 0 90px 5px #000;
+  -webkit-box-shadow: 0 0 90px #000;
+}
+
+/* close button positioned on upper right corner */
+.running_overlay .close {
+  background-image:url('/static/close.png');
+  position:absolute;
+  right:-15px;
+  top:-15px;
+  cursor:pointer;
+  height:35px;
+  width:35px;
+}
+
+
+
 </style>
 <script src="http://cdn.jquerytools.org/1.2.5/jquery.tools.min.js"></script>
 <script type="text/javascript" src="http://maps.google.com/maps/api/js?sensor=false"></script>
 <script type="text/javascript">
+
+   var running = true;
 
    var default_path_opacity = 0.5;
    var active_path_opacity = 1.0;
@@ -471,7 +522,7 @@ html,body,all
     }
 
     function plot_continual() {
-       if (document.settings.running.checked) {
+       if (running) {
           for (route in routes) {
                 plot_buses(map, routes[route].buses, route);
           }
@@ -479,13 +530,13 @@ html,body,all
     }
 
     function update_continual() {
-        if (document.settings.running.checked) {
+        if (running) {
           update_buses();
         }
     }
 
     function update_bus_times_continual() {
-       if (document.settings.running.checked) {
+       if (running) {
           if (cur_bus_times_info != {}) {
              draw_bus_times(cur_bus_times_info.route,
                             cur_bus_times_info.bus_id,
@@ -500,8 +551,12 @@ html,body,all
 
       setInterval( plot_continual, 500);
 
-      setInterval(function() { document.settings.running.checked = false; },
-                  5*60*1000);
+      setInterval(function() {
+          if (running) {
+            running = false;
+            $("#running_overlay").overlay().load();
+          }
+      }, 5*60*1000);
 
       setInterval( update_continual, 15000);
 
@@ -758,8 +813,12 @@ html,body,all
        draw_buses_continual(map);
     {% endif %}
 
-   }
+    $("#running_overlay").overlay({
+        onClose: function(x) { running = true; }
+    });
 
+               
+   }
 </script>
 </head>
 <body onload="initialize()">
@@ -787,7 +846,7 @@ html,body,all
       <input type="checkbox" name="est" checked="{{est}}"> Estimate Locations &nbsp;&nbsp;&nbsp;
       <input type="checkbox" name="esth" checked="true"> Estimate Headings &nbsp;&nbsp;&nbsp;
       <input type="checkbox" name="snap" checked="{{snap}}"> Snap to Route &nbsp;&nbsp;&nbsp;
-      <input type="checkbox" name="running" checked="true"> Running &nbsp;&nbsp;&nbsp;
+      <!-- <input type="checkbox" name="running" checked="true"> Running &nbsp;&nbsp;&nbsp; -->
       <a href="/">intro</a>
 
 
@@ -799,4 +858,14 @@ html,body,all
 
   </div>
   </div>
+
+
+<div class="running_overlay" id="running_overlay">
+  <div class="running_overlay_details">
+    <h3>Updates Paused</h3>
+    <p>Close this box to resume updating.</p>
+  </div>
+</div>
+
+      
 </body> </html>
