@@ -4,14 +4,15 @@ This script made the slightly non equilateral icons that are in static
 
 import sys, png
 import math
+
+scale=3
+size=16
+
 def get_img(i):
     def to_rad(deg):
         return deg*math.pi/180
-
-    scale=3
-
-    max_x, max_y = 24*scale, 24*scale
-    x_off = y_off = 12*scale
+    max_x, max_y = size*scale, size*scale
+    x_off = y_off = size/2*scale
     hyp = float(x_off)-1.0
 
     def get_point(theta):
@@ -67,11 +68,11 @@ def get_img(i):
 
         assert 0 <= s <= 1, s
 
-        return 0,0,255,int(128*s)
+        return 0,0,255,int(160*s)
 
-    for y in range(24):
+    for y in range(size):
         row = []
-        for x in range(24):
+        for x in range(size):
             r,g,b,a = avg_val(x,y)
             row.append(r)
             row.append(g)
@@ -80,7 +81,7 @@ def get_img(i):
         yield row
 
 def mkicons():
-    p = png.Writer(width=24, height=24, alpha=True)
+    p = png.Writer(width=size, height=size, alpha=True)
     for i in range(0,360,3):
         f = open("dir_%s.png" % i, "wb")
         p.write(f, get_img(i))
