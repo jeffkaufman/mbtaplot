@@ -746,15 +746,42 @@ class Buses(webapp.RequestHandler):
 
 class Subways(webapp.RequestHandler):
     def get(self):
+        initial_zoom, initial_lat, initial_lon, should_recenter = interpret_loc_info(
+            self.request)
         template_values = {"routes": ["Red", "Orange", "Blue"],
                            "buses": True,
                            "stops": True,
                            "shading": False,
                            "est": True,
                            "snap": False,
+                           "initial_zoom": initial_zoom,
+                           "initial_lat": initial_lat,
+                           "initial_lon": initial_lon,
+                           "should_recenter": should_recenter
                            }
         path = os.path.join(os.path.dirname(__file__), 'index.html')
         self.response.out.write(template.render(path, template_values))
+
+def interpret_loc_info(request):
+    initial_zoom, initial_lat, initial_lon = 11, 42.3, -71.1
+    should_recenter = "true"
+
+    if request.get("ll"):
+        try:
+            lat, lon = request.get("ll").split(",")
+            lat, lon = float(lat), float(lon)
+            initial_lat, initial_lon = lat, lon
+            should_recenter = "false"
+        except Exception:
+            pass
+
+    if request.get("z"):
+        try:
+            initial_zoom = int(request.get("z"))
+        except Exception:
+            pass
+
+    return initial_zoom, initial_lat, initial_lon, should_recenter
 
 class MainPage(webapp.RequestHandler):
 
@@ -766,6 +793,8 @@ class MainPage(webapp.RequestHandler):
         snap = self.request.get('snap').lower() != "false"
         est = self.request.get('est').lower() != "false"
 
+        initial_zoom, initial_lat, initial_lon, should_recenter = interpret_loc_info(
+            self.request)
         routes = []
         routes_req = cgi.escape(self.request.get('routes'))
         if routes_req:
@@ -777,14 +806,20 @@ class MainPage(webapp.RequestHandler):
         if not routes:
             path = os.path.join(os.path.dirname(__file__), 'chooser.html')
 
-            template_values = {"routes": [{"tag": tag, "title": short_name(title)} for tag, title in allRoutes()]}
+            template_values = {"routes": [{"tag": tag, "title": short_name(title)}
+                                          for tag, title in allRoutes()]}
         else:
+
             template_values = {"shading": shading,
                                "snap": snap,
                                "est": est,
                                "stops": stops,
                                "buses": buses,
-                               "routes": routes}
+                               "routes": routes,
+                               "initial_lat": initial_lat,
+                               "initial_lon": initial_lon,
+                               "initial_zoom": initial_zoom,
+                               "should_recenter": should_recenter}
 
             path = os.path.join(os.path.dirname(__file__), 'index.html')
 

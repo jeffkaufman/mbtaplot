@@ -394,9 +394,9 @@ html,body,all
    }
 
    function initialize() {
-    var latlng = new google.maps.LatLng(42.3, -71.1);
+    var latlng = new google.maps.LatLng({{initial_lat}}, {{initial_lon}});
     var myOptions = {
-      zoom: 11,
+      zoom: {{initial_zoom}},
       center: latlng,
       mapTypeId: google.maps.MapTypeId.ROADMAP
     };
@@ -783,6 +783,7 @@ html,body,all
       draw_bus_times(cur_bus_times_info.route,
                      cur_bus_times_info.bus_id,
                      cur_bus_times_info.map);
+      generate_page_url();
     }
                
     function enable_route(route, should_recenter) {
@@ -794,17 +795,41 @@ html,body,all
       draw_route(map, route, should_recenter);
       plot_buses(map, routes[route].buses, route);
       reload_selects();
+      generate_page_url();
+    }
+
+    function generate_page_url() {
+      gen = "/?z=" + map.getZoom() + "&ll=" + map.getCenter().toUrlValue(10);
+      r = ""
+      for (route_id in routes) {
+        if (r == "") {
+          r = route_id;
+        }
+        else {
+          r += "," + route_id;
+        }
+      }
+      if (r != "") {
+         gen += "&routes=" + r;
+      }
+
+      $("#bookmark").attr("href",gen);
     }
 
     window.enable_route = enable_route;               
 
     {% for route in routes %}
-        enable_route("{{route}}", true);
+        enable_route("{{route}}", {{should_recenter}});
     {% endfor %}
 
 
+    google.maps.event.addListener(map, 'center_changed', function() {
+       generate_page_url();
+    });
+
     google.maps.event.addListener(map, 'zoom_changed', function() {
        merge_stop_predictions(map);
+       generate_page_url();
     });
     merge_stop_predictions(map);
 
@@ -817,7 +842,7 @@ html,body,all
         onClose: function(x) { running = true; }
     });
 
-               
+    generate_page_url();
    }
 </script>
 <script type="text/javascript">
@@ -860,6 +885,7 @@ html,body,all
       <input type="checkbox" name="esth" checked="true"> Estimate Headings &nbsp;&nbsp;&nbsp;
       <input type="checkbox" name="snap" checked="{{snap}}"> Snap to Route &nbsp;&nbsp;&nbsp;
       <!-- <input type="checkbox" name="running" checked="true"> Running &nbsp;&nbsp;&nbsp; -->
+      <a href="#" id="bookmark">permalink</a> &nbsp;&nbsp;&nbsp;
       <a href="/">intro</a>
 
 
