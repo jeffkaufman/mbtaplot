@@ -29,11 +29,6 @@ $.widget( "ui.geo_autocomplete", {
 		geocoder_types: 'locality,political,sublocality,neighborhood,country', // array of acceptable location types, see http://code.google.com/apis/maps/documentation/javascript/services.html#GeocodingAddressTypes
 		geocoder_address: false, // true = use the full formatted address, false = use only the segment that matches the search term
 
-		mapwidth: 100, // width of static map thumbnail
-		mapheight: 100, // height of static map thumbnail
-		maptype: 'terrain', // see http://code.google.com/apis/maps/documentation/staticmaps/#MapTypes
-		mapsensor: false, // see http://code.google.com/apis/maps/documentation/staticmaps/#Sensor
-
 		minLength: 3, // see http://jqueryui.com/demos/autocomplete/#option-minLength
 		delay: 300, // see http://jqueryui.com/demos/autocomplete/#option-delay
 		// callback function to get autocomplete results
@@ -82,8 +77,7 @@ $.widget( "ui.geo_autocomplete", {
 		},
 		// returns the HTML used for each autocomplete list item
 		getItemHTML: function(_item) {		
-			var _src = 'http://maps.google.com/maps/api/staticmap?visible=' + _item.viewport.getSouthWest().toUrlValue() + '|' + _item.viewport.getNorthEast().toUrlValue() + '&size=' + this.mapwidth + 'x' + this.mapheight + '&maptype=' + this.maptype + '&sensor=' + (this.mapsensor ? 'true' : 'false');
-			return '<a><img style="float:left;margin-right:5px;" src="' + _src + '" width="' + this.mapwidth + '" height="' + this.mapheight + '" /> ' + _item.label.replace(/,/gi, ',<br/>') + '<br clear="both" /></a>'
+			return '<a>' + _item.label + '<br></a>'
 		}
 	}
 });
