@@ -3,42 +3,6 @@
 <head>
 <link rel="shortcut icon" href="/favicon.ico"  type="image/x-icon" />
 <style type="text/css">
-html,body,all
-{
-  height: 100%;
-  margin: 0px;
-  padding: 0px;
-}
-
-p.routebox
-{
-  float: left;
-  border-style: solid;
-  border-width: 1px;
-  border-color: #cccccc;
-  width: 5em;
-  padding: 1px;
-  margin: 2px;
-}
-
-div.submits
-{
-  float: left;
-  clear: both;
-}
-
-div.references
-{
-  float: left;
-  clear: both;
-  width: 100%;
-}
-
-input.submits
-{
-  margin: 4px;
-}
-
 </style>
 <script type="text/javascript">
 
@@ -56,29 +20,27 @@ input.submits
 </head>
 <body>
 
-  <h1>MBTA Route Plotter</h1>
+  <h1>Intro</h1>
 
-  Choose routes to display (more than 3 is probably too much for your browser):
-
-  <form name="settings" action="/" method="get">
-  <div class="formdiv">
-  {% for route in routes %}
-     <p class="routebox"><input type="checkbox" name="route" value="{{route.tag}}"> {{route.title}}</p>     
-  {% endfor %}
-  </table>
-  </div>
-
-  <div class="submits">
-  <input type="checkbox" name="shading" value="true"> Shading<br>
-  <input type="checkbox" name="stops" value="false"> Hide Stops<br>
-  <input type="checkbox" name="buses" value="false"> Hide Buses<br>
-  <button class="submits" type="submit" name="" value="">Display Map</button>
-  </div>
+  Add routes by clicking on them:
   
-  </form>
+  <blockquote>
+  <img src="/static/help/add_route.png">
+  </blockquote>
 
-  <div class="references">
-  <hr>
+  Click on stops to see when buses and trains are expected to arrive:
+
+  <blockquote>
+  <img src="/static/help/click_stop.png">
+  </blockquote>
+
+  Click on buses and trains to see how long before they arrive at stops:
+
+  <blockquote>
+  <img src="/static/help/click_bus.png">
+  </blockquote>
+
+  <h3>About MBTA Route Plotter</h3>
 
   Created by <a href="http://sccs.swarthmore.edu/~cbr">Jeff Kaufman</a><br>
   Developer's notes at <a href="http://sccs.swarthmore.edu/~cbr/news/mbtaplot.html">mbtaplot notes</a><br>
@@ -103,6 +65,8 @@ input.submits
   or put in an issue on the <a
   href="http://github.com/jeffkaufman/mbtaplot/issues">bug tracker</a>.
   
-  </div>
+  <p>  
+
+  <a href="/">back</a>
   
 </body> </html>

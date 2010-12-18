@@ -783,6 +783,11 @@ def interpret_loc_info(request):
 
     return initial_zoom, initial_lat, initial_lon, should_recenter
 
+class Intro(webapp.RequestHandler):
+    def get(self):
+        path = os.path.join(os.path.dirname(__file__), 'intro.html')
+        self.response.out.write(template.render(path, {}))
+
 class MainPage(webapp.RequestHandler):
 
     def get(self):
@@ -803,29 +808,23 @@ class MainPage(webapp.RequestHandler):
         for route in self.request.get_all("route"):
             routes.append(cgi.escape(route))
 
-        if not routes:
-            path = os.path.join(os.path.dirname(__file__), 'chooser.html')
-
-            template_values = {"routes": [{"tag": tag, "title": short_name(title)}
-                                          for tag, title in allRoutes()]}
-        else:
-
-            template_values = {"shading": shading,
-                               "snap": snap,
-                               "est": est,
-                               "stops": stops,
-                               "buses": buses,
-                               "routes": routes,
-                               "initial_lat": initial_lat,
-                               "initial_lon": initial_lon,
-                               "initial_zoom": initial_zoom,
-                               "should_recenter": should_recenter}
-
-            path = os.path.join(os.path.dirname(__file__), 'index.html')
+        template_values = {"shading": shading,
+                           "snap": snap,
+                           "est": est,
+                           "stops": stops,
+                           "buses": buses,
+                           "routes": routes,
+                           "initial_lat": initial_lat,
+                           "initial_lon": initial_lon,
+                           "initial_zoom": initial_zoom,
+                           "should_recenter": should_recenter}
+        
+        path = os.path.join(os.path.dirname(__file__), 'index.html')
 
         self.response.out.write(template.render(path, template_values))
 
 application = webapp.WSGIApplication([('/', MainPage),
+                                      ('/intro', Intro),
                                       ('/subways', Subways),
                                       ('/Paths', Paths),
                                       ('/Buses', Buses),

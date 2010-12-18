@@ -13,15 +13,29 @@ html,body,all
 
 #map_canvas
 {
-  width:100%;
-  height:94%;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: 3em;
 }
 
 #options
 {
    width:100%;
-   height:1.4em;
-   clear: both;
+   header: 3em;
+}
+
+#settings
+{
+  padding: 2px;
+  margin: 0;
+}
+
+#go_status
+{
+  display: inline;
+  color: red;
 }
 
 /* styling for running/ not running overlay */
@@ -76,7 +90,12 @@ html,body,all
 </style>
 <script src="http://cdn.jquerytools.org/1.2.5/jquery.tools.min.js"></script>
 <script type="text/javascript" src="http://maps.google.com/maps/api/js?sensor=false"></script>
+<link type="text/css" href="/static/lib/jquery-ui-1.8.5.custom.css" rel="stylesheet" />
+<script type="text/javascript" src="/static/lib/jquery-ui-1.8.5.custom.min.js"></script>
+<script type="text/javascript" src="/static/lib/ui.geo_autocomplete.js"></script>
 <script type="text/javascript">
+
+   moved_from_defaults = false;
 
    var running = true;
 
@@ -412,7 +431,7 @@ html,body,all
 
     function get_bus_position(bus, route, t_now, timestamp)
     {
-       if (document.settings.est.checked) {
+       if ($("#est").attr("checked")) {
           lat = estimate_pos(bus.age_i, bus.age_j, timestamp, bus.lat_i, bus.lat_j, t_now);
           lon = estimate_pos(bus.age_i, bus.age_j, timestamp, bus.lon_i, bus.lon_j, t_now);
        }
@@ -422,7 +441,7 @@ html,body,all
           lon = bus.lon_j;
        }
 
-       if (document.settings.snap.checked) {
+       if ($("#snap").attr("checked")) {
          cpol = snap_to_path(route, bus.dir, lat, lon);
          lat = cpol[0];
          lon = cpol[1];
@@ -454,7 +473,7 @@ html,body,all
           var lat_lon = get_bus_position(bus, route, t_now, timestamp);
           var lat_lon_1 = get_bus_position(bus, route, t_now+5, timestamp);
 
-          if (document.settings.esth.checked)
+          if (true)
           {
              // update heading
              var delta_lat = lat_lon_1[0] - lat_lon[0];
@@ -768,7 +787,8 @@ html,body,all
     }
                
     function enable_route_from_event(event) {
-       enable_route($('#route_adder').val(), false);
+       /* recenter if never moved from default */
+       enable_route($('#route_adder').val(), !moved_from_defaults);
     }
 
     function disable_route(route) {
@@ -825,6 +845,7 @@ html,body,all
 
     google.maps.event.addListener(map, 'center_changed', function() {
        generate_page_url();
+       moved_from_defaults = true;
     });
 
     google.maps.event.addListener(map, 'zoom_changed', function() {
@@ -842,7 +863,38 @@ html,body,all
         onClose: function(x) { running = true; }
     });
 
+    reload_selects();
     generate_page_url();
+
+    $('#address').geo_autocomplete({
+      geocoder_region: 'us/ma',
+      geocoder_types: 'street_address,route,intersection,political,colloquial_area,locality,sublocality,neighborhood,premise,subpremise,postal_code,airport,park',
+      geocoder_address: 'true',
+      select: function(_event, _ui) {
+        $("#go").click();
+      }
+    });
+
+    $("#address").keyup(function(event){
+      if(event.keyCode == 13){
+        $("#address").autocomplete("close");
+        $("#go").click();
+      }
+    });
+
+    geocoder = new google.maps.Geocoder();
+    $("#go").click(function(event){
+      geocoder.geocode( { 'address': $("#address").val() }, function(results, status) {
+        if (status == google.maps.GeocoderStatus.OK) {
+          map.setZoom(16);
+          map.setCenter(results[0].geometry.location);
+          $("#go_status").text("");
+        } else {
+          $("#go_status").text("need more details");
+        }
+      });
+    });
+
    }
 </script>
 <script type="text/javascript">
@@ -858,6 +910,12 @@ html,body,all
   })();
 
 </script>
+<style type="text/css">
+.ui-autocomplete { overflow-y: auto; width:300px; }
+* html .ui-autocomplete { /* IE max- */height: expression( this.scrollHeight > 320 ? "320px" : "auto" ); }
+.ui-autocomplete { max-height: 320px; }
+.ui-autocomplete li { font-size:10pt; }
+</style>
 </head>
 <body onload="initialize()">
   <div id="all" style="height: 100%">
@@ -867,10 +925,19 @@ html,body,all
      javascript and will not work without it.  Please consider
      enabling javascript or using a more recent browser
   </noscript>
-  <div id="map_canvas"></div>
   <div id="options">
 
-    <form name="settings">
+    <div id="settings">
+      <input type="text" id="address" name="address" size="50" />
+      <button id="go">go</button>
+      <div id="go_status"></div>
+      &nbsp;&nbsp;&nbsp;
+ 
+      <a href="#" id="bookmark">permalink</a> &nbsp;&nbsp;&nbsp;
+      <a href="/intro">intro</a>
+
+      <br>
+
       <select id="route_adder">
          <option value="">Add (loading)</option>
       </select>
@@ -881,22 +948,15 @@ html,body,all
 
       &nbsp;&nbsp;&nbsp;
 
-      <input type="checkbox" name="est" checked="{{est}}"> Estimate Locations &nbsp;&nbsp;&nbsp;
-      <input type="checkbox" name="esth" checked="true"> Estimate Headings &nbsp;&nbsp;&nbsp;
-      <input type="checkbox" name="snap" checked="{{snap}}"> Snap to Route &nbsp;&nbsp;&nbsp;
-      <!-- <input type="checkbox" name="running" checked="true"> Running &nbsp;&nbsp;&nbsp; -->
-      <a href="#" id="bookmark">permalink</a> &nbsp;&nbsp;&nbsp;
-      <a href="/">intro</a>
-
-
-
-
-    </form>
+      <input type="checkbox" id="est" checked="{{est}}"> Estimate Locations &nbsp;&nbsp;&nbsp;
+      <input type="checkbox" id="snap" checked="{{snap}}"> Snap
+    </div>
 
 
 
   </div>
-  </div>
+<div id="map_canvas"></div>
+</div>
 
 
 <div class="running_overlay" id="running_overlay">
