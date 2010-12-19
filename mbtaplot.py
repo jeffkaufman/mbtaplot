@@ -14,6 +14,7 @@ import dateutil.tz
 import datetime
 from google.appengine.api import urlfetch
 from google.appengine.api import memcache
+import route_table
 
 BUS_FEED="http://webservices.nextbus.com/service/publicXMLFeed?"
 SUBWAY_FEED_DIR="http://developer.mbta.com/Data/"
@@ -783,6 +784,29 @@ def interpret_loc_info(request):
 
     return initial_zoom, initial_lat, initial_lon, should_recenter
 
+class RoutesInView(webapp.RequestHandler):
+    def get(self):
+
+        try:
+            north = float(self.request.get("north"))
+            east = float(self.request.get("east"))
+            south = float(self.request.get("south"))
+            west = float(self.request.get("west"))
+        except ValueError:
+            self.response.out.write(json.dumps([]))
+            return
+
+        def isin(lat, lon):
+            return south < lat < north and east < lon < west
+
+        routes = set()
+
+        for route, stop, lat, lon in route_table.table:
+            if isin(lat,lon):
+                routes.add(route)
+
+        self.response.out.write(json.dumps(list(sorted(routes))))
+
 class Intro(webapp.RequestHandler):
     def get(self):
         path = os.path.join(os.path.dirname(__file__), 'intro.html')
@@ -827,6 +851,7 @@ application = webapp.WSGIApplication([('/', MainPage),
                                       ('/intro', Intro),
                                       ('/subways', Subways),
                                       ('/Paths', Paths),
+                                      ('/RoutesInView', RoutesInView),
                                       ('/Buses', Buses),
                                       ('/Routes', Routes),
                                       ('/Arrivals', Arrivals),
