@@ -105,7 +105,7 @@ html,body,all
 <script type="text/javascript" src="/static/lib/ui.geo_autocomplete.js"></script>
 <script type="text/javascript">
 
-   moved_from_defaults = false;
+   moved_from_defaults = !{{should_recenter}};
 
    var running = true;
 
@@ -769,27 +769,44 @@ html,body,all
     $("#route_deler").change(disable_route_from_event);
                          
     function reload_selects() {
+
       $.getJSON("/Routes", function(route_names) {
 
-        $('#route_adder').find('option').remove().end().append(
-             '<option value"">Add Route</option>');
-        $('#route_deler').find('option').remove().end().append(
-             '<option value"">Remove Route</option>');
-                         
-        for (route_no in route_names) {
-           route_id = route_names[route_no][0];
-           route_displayname = route_names[route_no][1];
+        b = map.getBounds();
 
-           use_box = "#route_adder";
-           if (route_id in routes) {
-              use_box = "#route_deler";
-           }
-                         
-           $(use_box).append('<option value="' + route_id + '">' +
-                 route_displayname + '</option>');
-           }
-        }
-      );
+        var north = b.getNorthEast().lat();
+        var east = b.getNorthEast().lng();
+        var south = b.getSouthWest().lat();
+        var west = b.getSouthWest().lng();
+
+        var locString = "north="+north+"&east="+east+"&west="+west+"&south="+south;
+
+        $.getJSON("/RoutesInView?"+locString, function(visible_route_ids) {
+  
+          $('#route_adder').find('option').remove().end().append(
+               '<option value"">Add Route</option>');
+          $('#route_deler').find('option').remove().end().append(
+               '<option value"">Remove Route</option>');
+
+          for (route_no in route_names) {
+             route_id = route_names[route_no][0];
+             route_displayname = route_names[route_no][1];
+  
+             use_box = "#route_adder";
+             if (route_id in routes) {
+                use_box = "#route_deler";
+             }
+             else if ($.inArray(route_id, visible_route_ids) == -1) {
+                use_box = null;
+             }
+              
+             if (use_box != null) {
+               $(use_box).append('<option value="' + route_id + '">' +
+                   route_displayname + '</option>');
+             }
+          }
+        });
+      });
     }
 
     function disable_route_from_event(event) {
@@ -855,12 +872,14 @@ html,body,all
 
     google.maps.event.addListener(map, 'center_changed', function() {
        generate_page_url();
+       reload_selects();
        moved_from_defaults = true;
     });
 
     google.maps.event.addListener(map, 'zoom_changed', function() {
-       merge_stop_predictions(map);
        generate_page_url();
+       merge_stop_predictions(map);
+       reload_selects();
     });
     merge_stop_predictions(map);
 
@@ -876,12 +895,26 @@ html,body,all
     reload_selects();
     generate_page_url();
 
+    function set_center_marker(mpos) {
+      if (search_center_marker) {
+        search_center_marker.setPosition(mpos);
+      }
+      else {
+        search_center_marker = new google.maps.Marker({
+        position: mpos, map: map });
+      }
+    }
+
     $('#address').geo_autocomplete({
       geocoder_region: 'us/ma',
       geocoder_types: 'street_address,route,intersection,political,colloquial_area,locality,sublocality,neighborhood,premise,subpremise,postal_code,airport,park',
       geocoder_address: 'true',
       select: function(_event, _ui) {
-        $("#go").click();
+        if (_ui.item.viewport) {
+          map.fitBounds(_ui.item.viewport);
+          set_center_marker(_ui.item.viewport.getCenter());
+          $("#go_status").text("");
+        }
       }
     });
 
@@ -900,13 +933,7 @@ html,body,all
         if (status == google.maps.GeocoderStatus.OK) {
           map.setZoom(16);
           var mpos = results[0].geometry.location;
-          if (search_center_marker) {
-            search_center_marker.setPosition(mpos);
-          }
-          else {
-            search_center_marker = new google.maps.Marker({
-              position: mpos, map: map });
-          }
+          set_center_marker(mpos);
           map.setCenter(mpos);
           $("#go_status").text("");
         } else {

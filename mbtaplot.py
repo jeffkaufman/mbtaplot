@@ -797,7 +797,7 @@ class RoutesInView(webapp.RequestHandler):
             return
 
         def isin(lat, lon):
-            return south < lat < north and east < lon < west
+            return south < lat < north and west < lon < east
 
         routes = set()
 
