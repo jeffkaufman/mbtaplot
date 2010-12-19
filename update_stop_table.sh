@@ -8,4 +8,7 @@ do
   done
 done > ugly_raw_route_table.txt
 
-python process_route_table.py ugly_raw_route_table.txt > route_table.py
+curl http://developer.mbta.com/RT_Archive/RealTimeHeavyRailKeys.csv | \
+     grep -v ^Line | awk '-F,' '{print $1,$2,$14,$15}' > ugly_subway_route_table.txt
+
+python process_route_table.py ugly_raw_route_table.txt ugly_subway_route_table.txt > route_table.py
