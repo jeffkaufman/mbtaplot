@@ -476,7 +476,10 @@ def allRoutes():
 
 
     allr = []
-    allr.extend([("Red", "Red"),("Orange","Orng"), ("Blue","Blue")])
+    allr.extend([("Red", "Red Line"),
+                 ("Orange","Orange Line"),
+                 ("Blue","Blue Line")])
+
     allr.extend([[route.getAttribute("tag"), route.getAttribute("title")]
                  for route in xmldoc.getElementsByTagName("route")])
     return allr
