@@ -39,7 +39,7 @@ html,body,all
 #adsense
 {
   position: absolute;
-  right: 0px;
+  right:0px;
 }
 
 #go_status
@@ -47,6 +47,14 @@ html,body,all
   display: inline;
   color: red;
 }
+
+#loading 
+{
+  position: absolute;
+  width: 48px;
+  left:380px;
+  display: none;
+}  
 
 /* styling for running/ not running overlay */
 .running_overlay_details {
@@ -106,6 +114,20 @@ html,body,all
 <script type="text/javascript">
 
    moved_from_defaults = !{{should_recenter}};
+
+   var n_loading = 0;
+   function start_loading() {
+     if (n_loading == 0) {
+       $("#loading").show();
+     }
+     n_loading += 1;     
+   }
+   function stop_loading() {
+     n_loading -= 1;
+     if (n_loading == 0) {
+       $("#loading").hide();
+     }
+   }
 
    var running = true;
 
@@ -225,9 +247,11 @@ html,body,all
 
      cur_bus_times_info = {route: route, bus_id: bus_id, map: map};
 
+
+     start_loading();
      /* write new markers */
      $.getJSON('/Buses?route=' + route + '&bus_id=' + bus_id, function(buses) {
-
+        stop_loading();
         /* don't update if they've asked for something else in the mean time */
         if (route != cur_bus_times_info.route ||
             bus_id !=  cur_bus_times_info.bus_id) {
@@ -746,8 +770,10 @@ html,body,all
                     }
 
                     for (tag_no in smarker.stop_tags) {
+                       start_loading();
                        $.getJSON('/Arrivals?stop=' + smarker.stop_tags[tag_no], function(arrival_info) {
                           update_arrivals(arrival_info);
+                          stop_loading();
                        });
                     }
                  });
@@ -761,6 +787,7 @@ html,body,all
 
             {% endif %}
 
+            stop_loading();
          });
 
     }
@@ -770,6 +797,7 @@ html,body,all
                          
     function reload_selects() {
 
+      start_loading();
       $.getJSON("/Routes", function(route_names) {
 
         b = map.getBounds();
@@ -805,6 +833,7 @@ html,body,all
                    route_displayname + '</option>');
              }
           }
+          stop_loading();
         });
       });
     }
@@ -837,6 +866,8 @@ html,body,all
       if (route == undefined || route in routes) {
          return;
       }
+
+      start_loading();
 
       routes[route] = {};
       draw_route(map, route, should_recenter);
@@ -999,7 +1030,10 @@ html,body,all
       <input type="checkbox" id="snap" checked="{{snap}}"> Snap to Path
       </small></small>
 
+    </div>
 
+    <div id="loading">
+      <img src="/static/loading.gif"/>
     </div>
 
     <div id="adsense">
@@ -1017,10 +1051,10 @@ html,body,all
     </div>
 
 
-
   </div>
 <div id="map_canvas"></div>
 </div>
+
 
 
 <div class="running_overlay" id="running_overlay">
