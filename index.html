@@ -451,6 +451,7 @@ html,body,all
     var myOptions = {
       zoom: {{initial_zoom}},
       center: latlng,
+      scrollwheel: false,
       mapTypeId: google.maps.MapTypeId.ROADMAP
     };
     var map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);
