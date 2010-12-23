@@ -71,16 +71,22 @@ def get_text(use_url, refresh, isxml=False,
 
     if not result_val or time.time()-result_age > refresh:
         logging.info("fetch %s" % use_url)
-        result = urlfetch.fetch(url=use_url,
-                                headers=headers)
-        if result.status_code == 200:
+        
+        try:
+            result = urlfetch.fetch(url=use_url,
+                                    headers=headers)
+        except Exception:
+            result = None
+
+        if result is not None and result.status_code == 200:
             result_val = result.content
             result_age = time.time()
             cached_val = result_age, result_val
 
             cache.set(use_url, cached_val, time=refresh)
         else:
-            logging.warning("fetch failed status=%s %s" % (result.status_code, use_url))
+            logging.warning("fetch failed status=%s %s" % (
+                    result.status_code if result else "result none", use_url))
 
     if result_val:
         if isxml:
