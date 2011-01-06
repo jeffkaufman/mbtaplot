@@ -737,7 +737,10 @@ html,body,all
                          else {
                              for (arrival_no in arrivals)
                              {
-                                all_arrivals.push([arrivals[arrival_no][0], arrivals[arrival_no][1], arrivals[arrival_no][2]]);
+                                all_arrivals.push([arrivals[arrival_no][0],
+                                                   arrivals[arrival_no][1],
+	                                           arrivals[arrival_no][2],
+                                                   arrivals[arrival_no][3]]);
                              }
                          }
 
@@ -751,13 +754,14 @@ html,body,all
                             var minutes = all_arrivals[all_arrival_no][0];
                             var route = all_arrivals[all_arrival_no][1];
                             var title = all_arrivals[all_arrival_no][2];
+                            var tag = all_arrivals[all_arrival_no][3];
 
                             if (minutes == "0") { minutes = "nowish"; }
                             else { minutes += "min" ; }
 
                             temp_t += "<tr><td align=\"right\">" + minutes +
                               ":</td><td><a href=\"/?route="
-                                  + route + "\" onclick=\"window.enable_route("+route+", false); window.times_info_window.close(); return false;\">"
+                                  + tag + "\" onclick=\"window.enable_route("+tag+", false); window.times_info_window.close(); return false;\">"
                                   + route + "</a> "
                                   + title + "</td></tr>";
                          }

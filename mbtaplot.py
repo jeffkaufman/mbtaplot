@@ -610,13 +610,14 @@ class Arrivals(webapp.RequestHandler):
             p = []
             for predictions in xmldoc.getElementsByTagName("predictions"):
                 route = short_name(predictions.getAttribute("routeTitle"))
+                tag = predictions.getAttribute("routeTag")
                 for direction in predictions.getElementsByTagName("direction"):
                     title = direction.getAttribute("title")
                     for prediction in direction.getElementsByTagName("prediction"):
                         minutes = int(prediction.getAttribute("minutes")) - int(doc_age/60)
                         if minutes < 0:
                             continue
-                        p.append((minutes,route,title))
+                        p.append((minutes,route,title,tag))
 
         p.sort()
         self.response.out.write(json.dumps(["none" if not p else "ok", p,stop]))
