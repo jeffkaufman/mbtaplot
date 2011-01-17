@@ -113,7 +113,58 @@ html,body,all
 <script type="text/javascript" src="/static/lib/ui.geo_autocomplete.js"></script>
 <script type="text/javascript">
 
-   moved_from_defaults = !{{should_recenter}};
+   // don't adjust window.location until we're properly loaded
+   set_window_location = false;
+
+   var initial_lat = {{initial_lat}};
+   var initial_lon = {{initial_lon}};
+   var initial_zoom = {{initial_zoom}};
+   var moved_from_defaults = !{{should_recenter}};
+   var initial_routes = [];
+   {% for route in routes %}
+      initial_routes.push("{{route}}");
+   {% endfor %}
+
+
+   function getParameterByName( name ) {
+       name = name.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
+       var regexS = "[\\?&]"+name+"=([^&#]*)";
+       var regex = new RegExp( regexS );
+       var results = regex.exec( window.location.hash );
+       if( results == null )
+         return "";
+       else
+         return decodeURIComponent(results[1].replace(/\+/g, " "));
+    }
+   
+   function setInitials() {
+     if (window.location.hash) {
+       initial_routes = []
+       var routes_param = getParameterByName("routes");
+       var ll_param = getParameterByName("ll");
+       var z_param = getParameterByName("z");
+
+       if (routes_param) {
+          routes_param = routes_param.split(",");
+          for (route_number in routes_param) {
+            initial_routes.push(routes_param[route_number]);
+          }
+       }
+     
+       if (ll_param) {
+          ll_param = ll_param.split(",");
+          initial_lat = ll_param[0];
+          initial_lon = ll_param[1];
+       }
+
+       if (z_param) {
+          initial_zoom = parseInt(z_param);
+       }
+
+       moved_from_defaults = true;
+     }
+   }
+   setInitials();
 
    var n_loading = 0;
    function start_loading() {
@@ -447,9 +498,9 @@ html,body,all
    }
 
    function initialize() {
-    var latlng = new google.maps.LatLng({{initial_lat}}, {{initial_lon}});
+    var latlng = new google.maps.LatLng(initial_lat, initial_lon);
     var myOptions = {
-      zoom: {{initial_zoom}},
+      zoom: initial_zoom,
       center: latlng,
       scrollwheel: false,
       mapTypeId: google.maps.MapTypeId.ROADMAP
@@ -896,15 +947,17 @@ html,body,all
          gen += "&routes=" + r;
       }
 
-      $("#bookmark").attr("href",gen);
+      $("#bookmark").attr("href","/#"+gen);
+      if (set_window_location) {
+         window.location.hash="#"+gen;
+      }
     }
 
     window.enable_route = enable_route;               
 
-    {% for route in routes %}
-        enable_route("{{route}}", {{should_recenter}});
-    {% endfor %}
-
+    for (initial_route_no in initial_routes) {
+       enable_route(initial_routes[initial_route_no], !moved_from_defaults);
+    }
 
     google.maps.event.addListener(map, 'center_changed', function() {
        generate_page_url();
@@ -929,6 +982,8 @@ html,body,all
     });
 
     reload_selects();
+
+    set_window_location = true;
     generate_page_url();
 
     function set_center_marker(mpos) {
