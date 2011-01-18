@@ -139,12 +139,12 @@ html,body,all
    
    function setInitials() {
      if (window.location.hash) {
-       initial_routes = []
        var routes_param = getParameterByName("routes");
        var ll_param = getParameterByName("ll");
        var z_param = getParameterByName("z");
 
        if (routes_param) {
+          initial_routes = []
           routes_param = routes_param.split(",");
           for (route_number in routes_param) {
             initial_routes.push(routes_param[route_number]);
@@ -811,7 +811,7 @@ html,body,all
                             else { minutes += "min" ; }
 
                             temp_t += "<tr><td align=\"right\">" + minutes +
-                              ":</td><td><a href=\"/?route="
+                              ":</td><td><a href=\"/#/?routes="
                                   + tag + "\" onclick=\"window.enable_route("+tag+", false); window.times_info_window.close(); return false;\">"
                                   + route + "</a> "
                                   + title + "</td></tr>";
