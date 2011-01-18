@@ -125,7 +125,6 @@ html,body,all
       initial_routes.push("{{route}}");
    {% endfor %}
 
-
    function getParameterByName( name ) {
        name = name.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
        var regexS = "[\\?&]"+name+"=([^&#]*)";
@@ -165,6 +164,12 @@ html,body,all
      }
    }
    setInitials();
+
+   var lastAction = 0;
+   function updateLastAction() {
+     lastAction = new Date().getTime();
+   }
+   updateLastAction();
 
    var n_loading = 0;
    function start_loading() {
@@ -590,13 +595,16 @@ html,body,all
              bmarker.setMap(map);
              google.maps.event.addListener(bmarker, "mouseover", function() {
                 color_paths(bmarker.bus_route, bmarker.bus_direction);
+	        updateLastAction();
              });
              google.maps.event.addListener(bmarker, "click", function() {
                  times_info_window.close(); 
                  draw_bus_times(route, bmarker.bus_id, map);
+	         updateLastAction();
              });
              google.maps.event.addListener(bmarker, "mouseout", function() {
                 color_paths(null,null);
+                updateLastAction();
              });
              return bmarker;
 
@@ -658,10 +666,13 @@ html,body,all
 
       setInterval(function() {
           if (running) {
-            running = false;
-            $("#running_overlay").overlay().load();
+	    // run for 10 minutes without action, then pause
+	    if (new Date().getTime() - lastAction > 10*60*1000) {
+              running = false;
+              $("#running_overlay").overlay().load();
+	    }
           }
-      }, 5*60*1000);
+      }, 1*60*1000); // check once a minute
 
       setInterval( update_continual, 15000);
 
@@ -757,6 +768,7 @@ html,body,all
                  routes[route].stops[stop.tag] = smarker;
 
                  google.maps.event.addListener(smarker, "click", function() {
+                    updateLastAction();
                     draw_bus_times(null, null, null); // hide bus time markers
 
                     t = "<h3>" + stop.title;
@@ -895,10 +907,13 @@ html,body,all
     }
 
     function disable_route_from_event(event) {
+       updateLastAction();
        disable_route($('#route_deler').val());
     }
                
     function enable_route_from_event(event) {
+       updateLastAction();
+
        /* recenter if never moved from default */
        enable_route($('#route_adder').val(), !moved_from_defaults);
     }
@@ -963,12 +978,14 @@ html,body,all
        generate_page_url();
        reload_selects();
        moved_from_defaults = true;
+       updateLastAction();
     });
 
     google.maps.event.addListener(map, 'zoom_changed', function() {
        generate_page_url();
        merge_stop_predictions(map);
        reload_selects();
+       updateLastAction();
     });
     merge_stop_predictions(map);
 
@@ -1001,6 +1018,7 @@ html,body,all
       geocoder_types: 'street_address,route,intersection,political,colloquial_area,locality,sublocality,neighborhood,premise,subpremise,postal_code,airport,park',
       geocoder_address: 'true',
       select: function(_event, _ui) {
+        updateLastAction();
         if (_ui.item.viewport) {
           map.fitBounds(_ui.item.viewport);
           set_center_marker(_ui.item.viewport.getCenter());
@@ -1010,6 +1028,7 @@ html,body,all
     });
 
     $("#address").keyup(function(event){
+      updateLastAction();
       if(event.keyCode == 13){
         $("#address").autocomplete("close");
         $("#go").click();
@@ -1020,6 +1039,7 @@ html,body,all
     var search_center_marker;
     geocoder = new google.maps.Geocoder();
     $("#go").click(function(event){
+      updateLastAction();
       geocoder.geocode( { 'address': $("#address").val() }, function(results, status) {
         if (status == google.maps.GeocoderStatus.OK) {
           map.setZoom(16);
