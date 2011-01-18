@@ -995,7 +995,10 @@ html,body,all
     {% endif %}
 
     $("#running_overlay").overlay({
-        onClose: function(x) { running = true; }
+        onClose: function(x) { 
+          running = true; 
+          updateLastAction();
+        }
     });
 
     reload_selects();
