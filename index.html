@@ -17,7 +17,15 @@ html,body,all
   left: 0;
   right: 0;
   bottom: 0;
-  top: 64px;
+  top: 94px;
+}
+
+
+#top
+{
+  width: 100%;
+  position: absolute;
+  //header: 64px;
 }
 
 #options
@@ -25,6 +33,17 @@ html,body,all
    position: absolute;
    width:100%;
    header: 64px;
+   top: 64px;
+}
+
+#address
+{
+  color: grey;
+}
+
+#route_deler
+{
+  display: none;
 }
 
 #settings
@@ -40,6 +59,7 @@ html,body,all
 {
   position: absolute;
   right:0px;
+  top: 0px;
 }
 
 #go_status
@@ -48,21 +68,6 @@ html,body,all
   color: red;
 }
 
-#loading 
-{
-  position: absolute;
-  width: 48px;
-  left:380px;
-  display: none;
-}  
-
-#notice
-{
-  position: absolute;
-  width: 450px;
-  padding-top: 4px;
-  left:380px;
-}  
 
 /* styling for running/ not running overlay */
 .running_overlay_details {
@@ -530,7 +535,8 @@ html,body,all
 
     function get_bus_position(bus, route, t_now, timestamp)
     {
-       if ($("#est").attr("checked")) {
+       //if ($("#est").attr("checked")) {
+       if (true) {
           lat = estimate_pos(bus.age_i, bus.age_j, timestamp, bus.lat_i, bus.lat_j, t_now);
           lon = estimate_pos(bus.age_i, bus.age_j, timestamp, bus.lon_i, bus.lon_j, t_now);
        }
@@ -540,7 +546,8 @@ html,body,all
           lon = bus.lon_j;
        }
 
-       if ($("#snap").attr("checked")) {
+       //if ($("#snap").attr("checked")) {
+       if (true) {
          cpol = snap_to_path(route, bus.dir, lat, lon);
          lat = cpol[0];
          lon = cpol[1];
@@ -891,7 +898,7 @@ html,body,all
                '<option value"">Add Route</option>');
           $('#route_deler').find('option').remove().end().append(
                '<option value"">Remove Route</option>');
-
+          $('#route_deler').hide();
           for (route_no in route_names) {
              route_id = route_names[route_no][0];
              route_displayname = route_names[route_no][1];
@@ -899,6 +906,7 @@ html,body,all
              use_box = "#route_adder";
              if (route_id in routes) {
                 use_box = "#route_deler";
+                $('#route_deler').show();
              }
              else if ($.inArray(route_id, visible_route_ids) == -1) {
                 use_box = null;
@@ -970,7 +978,7 @@ html,body,all
          gen += "&routes=" + r;
       }
 
-      $("#bookmark").attr("href","/#"+gen);
+      // $("#bookmark").attr("href","/#"+gen);
       if (set_window_location) {
          window.location.hash="#"+gen;
       }
@@ -1046,6 +1054,10 @@ html,body,all
       }
     });
 
+    $("#address").focus(function(event){
+        this.value=(this.value==this.defaultValue)?'':this.value;this.color='black';
+        $("#address").css('color','black');
+    });
 
     var search_center_marker;
     geocoder = new google.maps.Geocoder();
@@ -1107,43 +1119,11 @@ html,body,all
      javascript and will not work without it.  Please consider
      enabling javascript or using a more recent browser
   </noscript>
-  <div id="options">
 
-    <div id="settings">
-      <input type="text" id="address" name="address" size="43" />
-      <button id="go">go</button>
-      <div id="go_status"></div>
- 
-      <br>
-
-      <select id="route_adder">
-         <option value="">Add (loading)</option>
-      </select>
-
-      <select id="route_deler">
-         <option value="">Remove (loading)</option>
-      </select>
-
-      <a href="/intro">intro</a>
-      <a href="#" id="bookmark">permalink</a>
-
-      <br>
-
-      <small><small>
-      <input type="checkbox" id="est" checked="{{est}}"> Estimate Locations
-      <input type="checkbox" id="snap" checked="{{snap}}"> Snap to Path
-      </small></small>
-
-    </div>
-
-    <div id="loading">
-      <img src="/static/loading.gif"/>
-    </div>
-
-    <div id="notice">
-      The MBTA buses are running slowly right now because there's lots of snow, but the
-      predictions don't take this into account.  So if it says 10 minutes, 15 might be a
-      better guess.
+  <div id="top">
+    <div id="siteid">
+      <img src="static/mbtaplot.png" alt="MBTA Plot: Less waiting out in the cold">
+      <img id="loading" alt="loading" src="/static/loading.gif"/>
     </div>
 
     <div id="adsense">
@@ -1159,7 +1139,40 @@ html,body,all
               src="http://pagead2.googlesyndication.com/pagead/show_ads.js">
       </script>
     </div>
+  </div>
 
+  <div id="options">
+
+    <div id="settings">
+      <input type="text" value="Type an Address Here"
+             id="address" name="address" size="43" />
+      <button id="go">Go</button>
+      <div id="go_status"></div>
+ 
+      &nbsp;&nbsp;&nbsp;
+
+      <select id="route_adder">
+         <option value="">Add (loading)</option>
+      </select>
+
+      <select id="route_deler">
+         <option value="">Remove (loading)</option>
+      </select>
+
+      &nbsp;&nbsp;&nbsp;
+
+      <a href="/intro">help and introduction</a>
+
+      <br>
+
+      <!--
+      <small><small>
+      <input type="checkbox" id="est" checked="{{est}}"> Estimate Locations
+      <input type="checkbox" id="snap" checked="{{snap}}"> Snap to Path
+      </small></small>
+      -->
+
+    </div>
 
   </div>
 <div id="map_canvas"></div>
