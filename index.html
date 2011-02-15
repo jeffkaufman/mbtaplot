@@ -894,11 +894,27 @@ html,body,all
 
         $.getJSON("/RoutesInView?"+locString, function(visible_route_ids) {
   
-          $('#route_adder').find('option').remove().end().append(
-               '<option value"">See Routes Near Here</option>');
+          var any_routes_showing = false;
+          for (route_no in route_names) {
+             route_id = route_names[route_no][0];
+             if (route_id in routes) {
+                any_routes_showing = true;
+             }
+          }
+
+          if (!any_routes_showing) {
+              $('#route_adder').find('option').remove().end().append(
+                   '<option value"">See Routes Near Here</option>');
+              $('#route_deler').hide();
+          }
+          else {
+              $('#route_adder').find('option').remove().end().append(
+                   '<option value"">More Routes Near Here</option>');
+              $('#route_deler').show();
+          }
           $('#route_deler').find('option').remove().end().append(
                '<option value"">Hide Route</option>');
-          $('#route_deler').hide();
+
           for (route_no in route_names) {
              route_id = route_names[route_no][0];
              route_displayname = route_names[route_no][1];
@@ -906,7 +922,6 @@ html,body,all
              use_box = "#route_adder";
              if (route_id in routes) {
                 use_box = "#route_deler";
-                $('#route_deler').show();
              }
              else if ($.inArray(route_id, visible_route_ids) == -1) {
                 use_box = null;
