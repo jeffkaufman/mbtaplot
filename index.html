@@ -895,7 +895,7 @@ html,body,all
         $.getJSON("/RoutesInView?"+locString, function(visible_route_ids) {
   
           $('#route_adder').find('option').remove().end().append(
-               '<option value"">Add Route</option>');
+               '<option value"">See Routes Near Here</option>');
           $('#route_deler').find('option').remove().end().append(
                '<option value"">Remove Route</option>');
           $('#route_deler').hide();
