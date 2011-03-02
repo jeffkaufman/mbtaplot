@@ -1,11 +1,18 @@
 curl 'http://webservices.nextbus.com/service/publicXMLFeed?command=routeList&a=mbta' | \
       grep "route tag" | awk -F\" '{print $2}' | while read route
 do
-  curl 'http://webservices.nextbus.com/service/publicXMLFeed?command=routeConfig&a=mbta&r='${route} | \
+  curl 'http://webservices.nextbus.com/service/publicXMLFeed?command=routeConfig&a=mba&r='${route} | \
        grep "<stop tag" | grep lat | grep lon | while read line
   do 
-    echo "$route $line"; 
+    echo "s $route $line"; 
   done
+
+  curl 'http://webservices.nextbus.com/service/publicXMLFeed?command=routeConfig&a=mbta&r='${route} | \
+       grep "<stop tag" | grep -v lat | grep -v lon | while read line
+  do 
+    echo "d $route $line"; 
+  done
+
 done > ugly_raw_route_table.txt
 
 curl http://developer.mbta.com/RT_Archive/RealTimeHeavyRailKeys.csv | \
