@@ -1,7 +1,9 @@
+#if false
+#then
 curl 'http://webservices.nextbus.com/service/publicXMLFeed?command=routeList&a=mbta' | \
       grep "route tag" | awk -F\" '{print $2}' | while read route
 do
-  curl 'http://webservices.nextbus.com/service/publicXMLFeed?command=routeConfig&a=mba&r='${route} | \
+  curl 'http://webservices.nextbus.com/service/publicXMLFeed?command=routeConfig&a=mbta&r='${route} | \
        grep "<stop tag" | grep lat | grep lon | while read line
   do 
     echo "s $route $line"; 
@@ -14,6 +16,7 @@ do
   done
 
 done > ugly_raw_route_table.txt
+#fi
 
 curl http://developer.mbta.com/RT_Archive/RealTimeHeavyRailKeys.csv | \
      grep -v ^Line | awk '-F,' '{print $1,$2,$14,$15}' > ugly_subway_route_table.txt
