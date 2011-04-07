@@ -666,9 +666,10 @@ def request_subways_literal(line):
         now_local = now.strftime("%H:%M:%S")
         t_now = to_sec(now_local, "NA")
 
-        if (now.month > 3 or (now.month == 3 and now.day >= 2)) and now.month < 11:
-            # DST
-            t_now += 60*60
+        #if (now.month > 3 or (now.month == 3 and now.day >= 2)) and now.month < 11:
+        #    # DST
+        #    t_now += 60*60
+        
 
         if n not in trips:
             trips[n] = []
