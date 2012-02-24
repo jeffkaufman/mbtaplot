@@ -148,7 +148,7 @@ html,body,all
        else
          return decodeURIComponent(results[1].replace(/\+/g, " "));
     }
-   
+
    function setInitials() {
      if (window.location.hash) {
        var routes_param = getParameterByName("routes");
@@ -162,7 +162,7 @@ html,body,all
             initial_routes.push(routes_param[route_number]);
           }
        }
-     
+
        if (ll_param) {
           ll_param = ll_param.split(",");
           initial_lat = ll_param[0];
@@ -189,7 +189,7 @@ html,body,all
      if (n_loading == 0) {
        $("#loading").show();
      }
-     n_loading += 1;     
+     n_loading += 1;
    }
    function stop_loading() {
      n_loading -= 1;
@@ -326,11 +326,11 @@ html,body,all
             bus_id !=  cur_bus_times_info.bus_id) {
           return;
         }
-      
+
         for (bus_no in buses) {
           var up = buses[bus_no].up;
           for (stop_tag in up) {
-             var stop_min = up[stop_tag]; 
+             var stop_min = up[stop_tag];
              if (route in routes && stop_tag in routes[route].stops) {
                 var smarker = routes[route].stops[stop_tag];
                 var btmarker = new google.maps.Marker({
@@ -533,10 +533,9 @@ html,body,all
        }
     }
 
-    function get_bus_position(bus, route, t_now, timestamp)
+    function get_bus_position(bus, route, t_now, timestamp, est)
     {
-       //if ($("#est").attr("checked")) {
-       if (true) {
+       if (est) {
           lat = estimate_pos(bus.age_i, bus.age_j, timestamp, bus.lat_i, bus.lat_j, t_now);
           lon = estimate_pos(bus.age_i, bus.age_j, timestamp, bus.lon_i, bus.lon_j, t_now);
        }
@@ -556,7 +555,7 @@ html,body,all
        return [lat, lon]
     }
 
-    function plot_buses(map, busarr, route) {
+    function plot_buses(map, busarr, linearr, route) {
 
        if (!(route in routes) || !("bus_cache" in routes[route])) {
           return;
@@ -576,8 +575,9 @@ html,body,all
           var bus_title = busid + " -- age " + bus.age_j;
 
           var t_now = curtime();
-          var lat_lon = get_bus_position(bus, route, t_now, timestamp);
-          var lat_lon_1 = get_bus_position(bus, route, t_now+5, timestamp);
+          var lat_lon = get_bus_position(bus, route, t_now, timestamp, true);
+          var lat_lon_1 = get_bus_position(bus, route, t_now+5, timestamp, true);
+          var lat_lon_last_known = get_bus_position(bus, route, t_now, timestamp, false);
 
           if (true)
           {
@@ -598,6 +598,9 @@ html,body,all
           }
 
           var blatlng = new google.maps.LatLng(lat_lon[0], lat_lon[1]);
+          var blatlng_last_known = new google.maps.LatLng(lat_lon_last_known[0],
+                                                          lat_lon_last_known[1]);
+          linepath = [blatlng, blatlng_last_known];
 
           function make_marker(bus_id)
           {
@@ -613,7 +616,7 @@ html,body,all
 	        updateLastAction();
              });
              google.maps.event.addListener(bmarker, "click", function() {
-                 times_info_window.close(); 
+                 times_info_window.close();
                  draw_bus_times(route, bmarker.bus_id, map);
 	         updateLastAction();
              });
@@ -634,6 +637,26 @@ html,body,all
           busarr[busid].setTitle(bus_title);
           busarr[busid].bus_route = route;
           busarr[busid].bus_direction = bus.dir;
+
+
+          function make_line(bus_id)
+          {
+            var bline = new google.maps.Polyline({
+              path: linepath,
+              strokeColor: "#0000FF",
+              strokeOpacity: 1.0,
+              strokeWeight: 2
+            });
+            //bline.setZIndex(998);
+            bline.setMap(map);
+
+            return bline;
+          }
+
+          if (!(busid in linearr)) {
+             linearr[busid] = make_line(bus.id);
+          }
+          linearr[busid].setPath(linepath)
        }
     }
 
@@ -652,7 +675,7 @@ html,body,all
     function plot_continual() {
        if (running) {
           for (route in routes) {
-                plot_buses(map, routes[route].buses, route);
+                plot_buses(map, routes[route].buses, routes[route].agelines, route);
           }
        }
     }
@@ -735,6 +758,11 @@ html,body,all
         delete routes[route].buses[bus_no];
       }
       delete routes[route].buses;
+      for (bus_no in routes[route].agelines) {
+        routes[route].agelines[bus_no].setMap(null);
+        delete routes[route].agelines[bus_no];
+      }
+      delete routes[route].agelines;
       for (stop_no in routes[route].stops) {
         routes[route].stops[stop_no].setMap(null);
         delete routes[route].stops[stop_no];
@@ -745,6 +773,7 @@ html,body,all
          routes[route].path_cache = {};
          routes[route].path_lines = {};
          routes[route].buses = [];
+         routes[route].agelines = [];
          routes[route].stops = {};
          $.getJSON('/Paths?route=' + route, function(r) {
 
@@ -877,7 +906,7 @@ html,body,all
 
     $("#route_adder").change(enable_route_from_event);
     $("#route_deler").change(disable_route_from_event);
-                         
+
     function reload_selects() {
 
       start_loading();
@@ -893,7 +922,7 @@ html,body,all
         var locString = "north="+north+"&east="+east+"&west="+west+"&south="+south;
 
         $.getJSON("/RoutesInView?"+locString, function(visible_route_ids) {
-  
+
           var any_routes_showing = false;
           for (route_no in route_names) {
              route_id = route_names[route_no][0];
@@ -918,7 +947,7 @@ html,body,all
           for (route_no in route_names) {
              route_id = route_names[route_no][0];
              route_displayname = route_names[route_no][1];
-  
+
              use_box = "#route_adder";
              if (route_id in routes) {
                 use_box = "#route_deler";
@@ -926,7 +955,7 @@ html,body,all
              else if ($.inArray(route_id, visible_route_ids) == -1) {
                 use_box = null;
              }
-              
+
              if (use_box != null) {
                $(use_box).append('<option value="' + route_id + '">' +
                    route_displayname + '</option>');
@@ -941,7 +970,7 @@ html,body,all
        updateLastAction();
        disable_route($('#route_deler').val());
     }
-               
+
     function enable_route_from_event(event) {
        updateLastAction();
 
@@ -954,7 +983,7 @@ html,body,all
          return;
       }
       undraw_route(map, route);
-               
+
       delete routes[route];
       reload_selects();
 
@@ -963,7 +992,7 @@ html,body,all
                      cur_bus_times_info.map);
       generate_page_url();
     }
-               
+
     function enable_route(route, should_recenter) {
       if (route == undefined || route in routes) {
          return;
@@ -973,7 +1002,7 @@ html,body,all
 
       routes[route] = {};
       draw_route(map, route, should_recenter);
-      plot_buses(map, routes[route].buses, route);
+      plot_buses(map, routes[route].buses, routes[route].agelines, route);
       reload_selects();
       generate_page_url();
     }
@@ -999,7 +1028,7 @@ html,body,all
       }
     }
 
-    window.enable_route = enable_route;               
+    window.enable_route = enable_route;
 
     for (initial_route_no in initial_routes) {
        enable_route(initial_routes[initial_route_no], !moved_from_defaults);
@@ -1026,8 +1055,8 @@ html,body,all
     {% endif %}
 
     $("#running_overlay").overlay({
-        onClose: function(x) { 
-          running = true; 
+        onClose: function(x) {
+          running = true;
           updateLastAction();
         }
     });
@@ -1151,7 +1180,7 @@ html,body,all
              id="address" name="address" size="43" />
       <button id="go">Go</button>
       <div id="go_status"></div>
- 
+
       &nbsp;&nbsp;&nbsp;
 
       <select id="route_adder">
@@ -1190,5 +1219,5 @@ html,body,all
   </div>
 </div>
 
-      
+
 </body> </html>
