@@ -545,8 +545,7 @@ html,body,all
           lon = bus.lon_j;
        }
 
-       //if ($("#snap").attr("checked")) {
-       if (true) {
+       if (est) {
          cpol = snap_to_path(route, bus.dir, lat, lon);
          lat = cpol[0];
          lon = cpol[1];
