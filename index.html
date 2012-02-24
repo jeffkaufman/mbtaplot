@@ -680,6 +680,19 @@ html,body,all
        }
     }
 
+    function bounds_update_continual() {
+       if (run_bounds_update) {
+           moved_from_defaults = true;
+           generate_page_url();
+           reload_selects();
+           merge_stop_predictions(map);
+
+           updateLastAction();
+
+           run_bounds_update = false;
+       }
+    }
+
     function update_continual() {
         if (running) {
           update_buses();
@@ -701,6 +714,7 @@ html,body,all
       plot_continual();
 
       setInterval( plot_continual, 500);
+      setInterval( bounds_update_continual, 2000);
 
       setInterval(function() {
           if (running) {
@@ -1034,20 +1048,14 @@ html,body,all
        enable_route(initial_routes[initial_route_no], !moved_from_defaults);
     }
 
-    google.maps.event.addListener(map, 'center_changed', function() {
-       generate_page_url();
-       reload_selects();
-       moved_from_defaults = true;
-       updateLastAction();
-    });
 
-    google.maps.event.addListener(map, 'zoom_changed', function() {
-       generate_page_url();
-       merge_stop_predictions(map);
-       reload_selects();
-       updateLastAction();
+    run_bounds_update = false;
+    google.maps.event.addListener(map, 'bounds_changed', function() {
+       run_bounds_update = true;
     });
     merge_stop_predictions(map);
+
+    run_bounds_update
 
 
     {% if buses %}
