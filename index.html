@@ -551,7 +551,7 @@ html,body,all
          lon = cpol[1];
        }
 
-       return [lat, lon]
+       return [lat, lon];
     }
 
     function plot_buses(map, busarr, linearr, route) {
@@ -655,7 +655,7 @@ html,body,all
           if (!(busid in linearr)) {
              linearr[busid] = make_line(bus.id);
           }
-          linearr[busid].setPath(linepath)
+          linearr[busid].setPath(linepath);
        }
     }
 
