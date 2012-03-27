@@ -670,6 +670,7 @@ def request_subways_literal(line):
         #    # DST
         #    t_now += 60*60
         
+        t_now += 60*60 # DST
 
         if n not in trips:
             trips[n] = []
